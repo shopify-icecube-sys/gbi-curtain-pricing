@@ -19,17 +19,16 @@ api_version = "2026-07"
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
+  [webhooks.privacy_compliance]
+  topics = [ "customers/redact", "customers/data_request", "shop/redact" ]
+  uri = "/webhooks/gdpr"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_cart_transforms"
 
 [auth]
 redirect_urls = [ "https://gbi-curtain-pricing.icecubedev.com/api/auth" ]
-
-[privacy_compliance]
-customer_data_request_url = "https://gbi-curtain-pricing.icecubedev.com/webhooks/customers/data_request"
-customer_deletion_url = "https://gbi-curtain-pricing.icecubedev.com/webhooks/customers/redact"
-shop_deletion_url = "https://gbi-curtain-pricing.icecubedev.com/webhooks/shop/redact"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
