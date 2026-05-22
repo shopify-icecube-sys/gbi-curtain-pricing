@@ -2,7 +2,7 @@
 
 client_id = "d36c73b472ed7674dc8315b3a2515f6e"
 name = "gbi-curtain-pricing"
-application_url = "https://67ff-2405-201-2003-20db-e50d-c78-87d0-87fd.ngrok-free.app"
+application_url = "https://gbi-curtain-pricing.icecubedev.com"
 embedded = true
 
 [build]
@@ -24,7 +24,7 @@ api_version = "2026-07"
 scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_cart_transforms"
 
 [auth]
-redirect_urls = [ "https://67ff-2405-201-2003-20db-e50d-c78-87d0-87fd.ngrok-free.app/api/auth" ]
+redirect_urls = [ "https://gbi-curtain-pricing.icecubedev.com/api/auth" ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
