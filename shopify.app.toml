@@ -26,6 +26,11 @@ scopes = "write_products,write_metaobjects,write_metaobject_definitions,write_ca
 [auth]
 redirect_urls = [ "https://gbi-curtain-pricing.icecubedev.com/api/auth" ]
 
+[privacy_compliance]
+customer_data_request_url = "https://gbi-curtain-pricing.icecubedev.com/webhooks/customers/data_request"
+customer_deletion_url = "https://gbi-curtain-pricing.icecubedev.com/webhooks/customers/redact"
+shop_deletion_url = "https://gbi-curtain-pricing.icecubedev.com/webhooks/shop/redact"
+
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
 name = "Demo Source Info"
