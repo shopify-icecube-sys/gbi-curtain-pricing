@@ -31,24 +31,30 @@ function runGbiCalculation() {
   }
 
   function getVisibleValue(name) {
-    const selectors = [
-      `select[name*="${name}"]`,
-      `input[name="${name}"]:checked`,
-      `.${name} select`,
-      `fieldset[id*="${name}"] input:checked`,
-      `fieldset legend:contains("${name}") ~ input:checked` // simplified fallback
-    ];
-    
-    for (let selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      for (let el of elements) {
-        if (el.offsetParent !== null || el.offsetWidth > 0 || el.offsetHeight > 0) {
-          return el.value.trim();
+    // 1. Try finding fieldsets (Radio buttons)
+    const legends = document.querySelectorAll('fieldset legend');
+    for (let legend of legends) {
+      if (legend.textContent.trim().includes(name)) {
+        const checkedInput = legend.parentElement.querySelector('input[type="radio"]:checked');
+        if (checkedInput) {
+          return checkedInput.value.trim();
         }
       }
     }
-    
-    // Shopify 2.0 variant select fallback
+
+    // 2. Try finding labels (Dropdowns)
+    const labels = document.querySelectorAll('label');
+    for (let label of labels) {
+      if (label.textContent.trim().includes(name)) {
+        const selectId = label.getAttribute('for');
+        if (selectId) {
+          const select = document.getElementById(selectId);
+          if (select) return select.value.trim();
+        }
+      }
+    }
+
+    // 3. Shopify 2.0 variant select fallback
     const form = document.querySelector('form[action*="/cart/add"]');
     if (form) {
       const variantIdInput = form.querySelector('[name="id"]');
@@ -56,7 +62,6 @@ function runGbiCalculation() {
         const variantSelect = document.querySelector(`select[name="id"] option[value="${variantIdInput.value}"]`);
         if (variantSelect) {
           const text = variantSelect.textContent;
-          // Hacky fallback if the selectors above fail
           if (name === "Style") {
             const styles = Object.keys(GBI_MASTER_CONFIG.style);
             for (let s of styles) if (text.includes(s)) return s;
