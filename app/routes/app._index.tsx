@@ -41,6 +41,62 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const actionType = formData.get("_action");
+
+  if (actionType === "create_demo_product") {
+    const linings = ["Standard Ivory", "Blackout", "Thermal Lining"];
+    const styles = ["Eyelet", "Goblet Pleat", "Pinch Pleat", "Wave", "3inch Pencil Pleat", "6inch Pencil Pleat"];
+    
+    const variants = [];
+    for (const l of linings) {
+      for (const s of styles) {
+        variants.push({ options: [l, s], price: 0 });
+      }
+    }
+
+    const CREATE_PRODUCT_MUTATION = `
+      mutation CreateDemoProduct($input: ProductInput!) {
+        productCreate(input: $input) {
+          product {
+            id
+            handle
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const productInput = {
+      title: "Ashley Wilde Borneo Stone Curtain Test",
+      status: "ACTIVE",
+      options: ["Lining", "Style"],
+      variants: variants,
+      metafields: [
+        {namespace: "custom", key: "fabric_roll_width", value: "140", type: "number_integer"},
+        {namespace: "custom", key: "vertical_pattern_repeat", value: "25", type: "number_integer"},
+        {namespace: "custom", key: "fabric_cost_per_metre", value: "20.0", type: "number_decimal"}
+      ]
+    };
+
+    try {
+      const response = await admin.graphql(CREATE_PRODUCT_MUTATION, {
+        variables: { input: productInput }
+      });
+      const data = await response.json();
+      
+      if (data.data?.productCreate?.userErrors?.length > 0) {
+        return { success: false, errors: data.data.productCreate.userErrors };
+      }
+      return { success: true, productHandle: data.data?.productCreate?.product?.handle, type: "product_created" };
+    } catch (error) {
+      return { success: false, errors: [error] };
+    }
+  }
+
 
   const CREATE_METAFIELD_DEFINITION = `
     mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
@@ -104,7 +160,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  return { success: true, createdCount: successCount, errors };
+  return { success: true, createdCount: successCount, errors, type: "metafields_created" };
 };
 
 export default function Index() {
@@ -122,7 +178,11 @@ export default function Index() {
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
       if (fetcher.data.success) {
-        shopify.toast.show("Metafields initialized successfully!");
+        if (fetcher.data.type === "product_created") {
+          shopify.toast.show("Demo product created successfully!");
+        } else {
+          shopify.toast.show("Metafields initialized successfully!");
+        }
       } else {
         shopify.toast.show("Something went wrong", { isError: true });
       }
@@ -149,7 +209,7 @@ export default function Index() {
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
           <s-button
             variant={isSetupComplete ? "secondary" : "primary"}
-            onClick={() => fetcher.submit({}, { method: "post" })}
+            onClick={() => fetcher.submit({ _action: "create_metafields" }, { method: "post" })}
             loading={isSubmitting ? true : undefined}
             disabled={isSetupComplete ? true : undefined}
           >
@@ -168,7 +228,29 @@ export default function Index() {
         </s-paragraph>
       </s-section>
 
-      <s-section heading="2. How It Works">
+      <s-section heading="2. App Reviewer Testing Options">
+        <s-paragraph>
+          To test the Cart Transform functionality, we need a product with the correct variants and metafields.
+          Click the button below to generate a Demo Curtain Product on this store.
+        </s-paragraph>
+
+        <div style={{ marginTop: '15px', marginBottom: '15px' }}>
+          <s-button
+            onClick={() => fetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
+            loading={fetcher.state === "submitting" ? true : undefined}
+            disabled={!isSetupComplete ? true : undefined}
+          >
+            Create Demo Product
+          </s-button>
+          {!isSetupComplete && (
+            <div style={{ marginTop: '5px' }}>
+              <s-text tone="critical">Please Initialize Metafields first (Step 1).</s-text>
+            </div>
+          )}
+        </div>
+      </s-section>
+
+      <s-section heading="3. How It Works">
         <s-unordered-list>
           <s-list-item>Add values to the newly created metafields in your Product pages.</s-list-item>
           <s-list-item>Customers add curtain products to their cart as normal.</s-list-item>
