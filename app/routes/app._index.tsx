@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -9,14 +9,23 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
-
   const query = `
     query {
       metafieldDefinitions(first: 50, ownerType: PRODUCT, namespace: "custom") {
         edges {
-          node {
-            key
-          }
+          node { key }
+        }
+      }
+      cartTransforms(first: 5) {
+        nodes {
+          id
+          functionId
+        }
+      }
+      products(first: 5, query: "title:'Ashley Wilde Borneo Stone Curtain Test'") {
+        nodes {
+          id
+          title
         }
       }
     }
@@ -28,13 +37,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const existingKeys = data.data?.metafieldDefinitions?.edges.map((e: any) => e.node.key) || [];
     const requiredKeys = ["fabric_roll_width", "vertical_pattern_repeat", "fabric_cost_per_metre"];
-
-
     const allExist = requiredKeys.every(key => existingKeys.includes(key));
 
-    return { metafieldsExist: allExist };
+    const cartTransformActive = (data.data?.cartTransforms?.nodes?.length ?? 0) > 0;
+    const demoProductExists = (data.data?.products?.nodes?.length ?? 0) > 0;
+
+    return { metafieldsExist: allExist, cartTransformActive, demoProductExists };
   } catch (error) {
-    return { metafieldsExist: false };
+    return { metafieldsExist: false, cartTransformActive: false, demoProductExists: false };
   }
 };
 
@@ -184,6 +194,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const data = await res.json() as any;
       
       if (data.data?.cartTransformCreate?.userErrors?.length > 0) {
+        const errMsg = data.data.cartTransformCreate.userErrors[0].message as string;
+        // If already registered, treat it as success
+        if (errMsg.toLowerCase().includes("already")) {
+          return { success: true, type: "cart_transform_activated" };
+        }
         return { success: false, errors: data.data.cartTransformCreate.userErrors };
       }
 
@@ -265,13 +280,12 @@ export default function Index() {
   const transformFetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
-  const { metafieldsExist } = useLoaderData<typeof loader>();
-
-  // Persist completed states across fetcher resets
-  const [productCreated, setProductCreated] = useState(false);
-  const [transformActivated, setTransformActivated] = useState(false);
+  const { metafieldsExist, cartTransformActive, demoProductExists } = useLoaderData<typeof loader>();
 
   const isSetupComplete = metafieldsExist || (metafieldFetcher.data?.type === "metafields_created" && metafieldFetcher.data?.success);
+  // Derive from loader (persistent) OR from fetcher response (optimistic)
+  const productCreated = demoProductExists || (productFetcher.data?.type === "product_created" && productFetcher.data?.success);
+  const transformActivated = cartTransformActive || (transformFetcher.data?.type === "cart_transform_activated" && transformFetcher.data?.success);
 
   // Metafield fetcher effect
   useEffect(() => {
@@ -289,7 +303,6 @@ export default function Index() {
   useEffect(() => {
     if (productFetcher.data && productFetcher.state === "idle") {
       if (productFetcher.data.success) {
-        setProductCreated(true);
         shopify.toast.show("Demo product created successfully!");
       } else {
         const errorMsg = productFetcher.data.errors?.[0]?.message ?? "Something went wrong";
@@ -302,7 +315,6 @@ export default function Index() {
   useEffect(() => {
     if (transformFetcher.data && transformFetcher.state === "idle") {
       if (transformFetcher.data.success) {
-        setTransformActivated(true);
         shopify.toast.show("Cart Transform Activated! Pricing is now live.");
       } else {
         const errorMsg = transformFetcher.data.errors?.[0]?.message ?? "Something went wrong";
