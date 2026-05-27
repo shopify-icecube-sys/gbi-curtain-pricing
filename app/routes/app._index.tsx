@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
@@ -260,36 +260,56 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const fetcher = useFetcher<typeof action>();
+  const metafieldFetcher = useFetcher<typeof action>();
+  const productFetcher = useFetcher<typeof action>();
+  const transformFetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
-
 
   const { metafieldsExist } = useLoaderData<typeof loader>();
 
-  const isSubmitting = fetcher.state === "submitting" || fetcher.state === "loading";
+  // Persist completed states across fetcher resets
+  const [productCreated, setProductCreated] = useState(false);
+  const [transformActivated, setTransformActivated] = useState(false);
 
-  const isSetupComplete = metafieldsExist || (fetcher.data?.type === "metafields_created" && fetcher.data?.success);
-  const isProductCreated = fetcher.data?.type === "product_created" && fetcher.data?.success;
-  const productHandle = fetcher.data?.productHandle;
+  const isSetupComplete = metafieldsExist || (metafieldFetcher.data?.type === "metafields_created" && metafieldFetcher.data?.success);
 
+  // Metafield fetcher effect
   useEffect(() => {
-    if (fetcher.data && fetcher.state === "idle") {
-      if (fetcher.data.success) {
-        if (fetcher.data.type === "product_created") {
-          shopify.toast.show("Demo product created successfully!");
-        } else if (fetcher.data.type === "metafields_created") {
-          shopify.toast.show("Metafields initialized successfully!");
-        } else if (fetcher.data.type === "cart_transform_activated") {
-          shopify.toast.show("Cart Transform Activated! Pricing is now live.");
-        }
+    if (metafieldFetcher.data && metafieldFetcher.state === "idle") {
+      if (metafieldFetcher.data.success) {
+        shopify.toast.show("Metafields initialized successfully!");
       } else {
-        const errorMsg = fetcher.data.errors && fetcher.data.errors.length > 0
-          ? fetcher.data.errors[0].message
-          : "Something went wrong";
+        const errorMsg = metafieldFetcher.data.errors?.[0]?.message ?? "Something went wrong";
         shopify.toast.show(errorMsg, { isError: true });
       }
     }
-  }, [fetcher.data, fetcher.state, shopify]);
+  }, [metafieldFetcher.data, metafieldFetcher.state, shopify]);
+
+  // Product fetcher effect
+  useEffect(() => {
+    if (productFetcher.data && productFetcher.state === "idle") {
+      if (productFetcher.data.success) {
+        setProductCreated(true);
+        shopify.toast.show("Demo product created successfully!");
+      } else {
+        const errorMsg = productFetcher.data.errors?.[0]?.message ?? "Something went wrong";
+        shopify.toast.show(errorMsg, { isError: true });
+      }
+    }
+  }, [productFetcher.data, productFetcher.state, shopify]);
+
+  // Transform fetcher effect
+  useEffect(() => {
+    if (transformFetcher.data && transformFetcher.state === "idle") {
+      if (transformFetcher.data.success) {
+        setTransformActivated(true);
+        shopify.toast.show("Cart Transform Activated! Pricing is now live.");
+      } else {
+        const errorMsg = transformFetcher.data.errors?.[0]?.message ?? "Something went wrong";
+        shopify.toast.show(errorMsg, { isError: true });
+      }
+    }
+  }, [transformFetcher.data, transformFetcher.state, shopify]);
 
   return (
     <s-page heading="GBI Curtain Pricing">
@@ -311,11 +331,11 @@ export default function Index() {
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
           <s-button
             variant={isSetupComplete ? "secondary" : "primary"}
-            onClick={() => fetcher.submit({ _action: "create_metafields" }, { method: "post" })}
-            loading={isSubmitting ? true : undefined}
+            onClick={() => metafieldFetcher.submit({ _action: "create_metafields" }, { method: "post" })}
+            loading={metafieldFetcher.state === "submitting" ? true : undefined}
             disabled={isSetupComplete ? true : undefined}
           >
-            {isSubmitting
+            {metafieldFetcher.state === "submitting"
               ? "Setting up..."
               : isSetupComplete
                 ? "Metafields Setup Complete ✅"
@@ -330,30 +350,27 @@ export default function Index() {
         </s-paragraph>
       </s-section>
 
-      <s-section heading="2. App Reviewer Testing Options">
+      <s-section heading="2. Create Demo Product">
         <s-paragraph>
           To test the Cart Transform functionality, we need a product with the correct variants and metafields.
           Click the button below to generate a Demo Curtain Product on this store.
         </s-paragraph>
 
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
-          {isProductCreated ? (
+          {productCreated ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <s-button variant="secondary" disabled>
                 Demo Product Created ✅
               </s-button>
               <s-text tone="success">
-                Product has been created! Please go to your Shopify Admin - Products to view it.
-              </s-text>
-              <s-text tone="warning">
-                <b>Note:</b> By default, new products might not be published to your Online Store channel. If you see a 404 error, please click the <b>"Preview"</b> button from the Product page in Shopify Admin, or manually publish it to the Online Store channel.
+                Product has been created! Go to Shopify Admin → Products to view and publish it.
               </s-text>
             </div>
           ) : (
             <>
               <s-button
-                onClick={() => fetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
-                loading={fetcher.state === "submitting" ? true : undefined}
+                onClick={() => productFetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
+                loading={productFetcher.state === "submitting" ? true : undefined}
                 disabled={!isSetupComplete ? true : undefined}
               >
                 Create Demo Product
@@ -368,25 +385,24 @@ export default function Index() {
         </div>
       </s-section>
 
-      <s-section heading="3. How It Works">
-        <s-unordered-list>
-          <s-list-item>Add values to the newly created metafields in your Product pages.</s-list-item>
-          <s-list-item>Customers add curtain products to their cart as normal.</s-list-item>
-          <s-list-item>The Cart Transform function automatically reads the metafields and calculates the final price at checkout.</s-list-item>
-        </s-unordered-list>
-      </s-section>
       <s-section heading="3. Activate Backend Pricing">
         <s-paragraph>
           Cart Transform (Function) extensions must be explicitly activated on the store after deployment.
           Click the button below to turn on the custom pricing backend.
         </s-paragraph>
         <div style={{ marginTop: '15px' }}>
-          <s-button
-            onClick={() => fetcher.submit({ _action: "activate_cart_transform" }, { method: "post" })}
-            loading={fetcher.state === "submitting" ? true : undefined}
-          >
-            Activate Pricing Backend
-          </s-button>
+          {transformActivated ? (
+            <s-button variant="secondary" disabled>
+              Pricing Backend Active ✅
+            </s-button>
+          ) : (
+            <s-button
+              onClick={() => transformFetcher.submit({ _action: "activate_cart_transform" }, { method: "post" })}
+              loading={transformFetcher.state === "submitting" ? true : undefined}
+            >
+              Activate Pricing Backend
+            </s-button>
+          )}
         </div>
       </s-section>
 
