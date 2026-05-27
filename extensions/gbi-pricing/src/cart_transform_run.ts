@@ -8,7 +8,7 @@ const NO_CHANGES: FunctionRunResult = {
   operations: [],
 };
 
-export function run(input: RunInput): FunctionRunResult {
+export function cartTransformRun(input: RunInput): FunctionRunResult {
   const operations: CartOperation[] = [];
 
   for (const line of input.cart.lines) {
