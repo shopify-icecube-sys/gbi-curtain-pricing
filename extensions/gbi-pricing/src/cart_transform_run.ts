@@ -1,14 +1,14 @@
 import type {
   RunInput,
-  FunctionRunResult,
-  CartOperation,
+  CartTransformRunResult,
+  Operation,
 } from "../generated/api";
 
-const NO_CHANGES: FunctionRunResult = {
+const NO_CHANGES: CartTransformRunResult = {
   operations: [],
 };
 
-export function cartTransformRun(input: RunInput): FunctionRunResult {
+export function cartTransformRun(input: RunInput): CartTransformRunResult {
   // Get the pricing component variant ID from the shop metafield set by admin app
   const componentVariantId = input.shop?.metafield?.value;
 
@@ -17,7 +17,7 @@ export function cartTransformRun(input: RunInput): FunctionRunResult {
     return NO_CHANGES;
   }
 
-  const operations: CartOperation[] = [];
+  const operations: Operation[] = [];
 
   for (const line of input.cart.lines) {
     if (line.merchandise.__typename !== "ProductVariant") continue;
@@ -39,7 +39,7 @@ export function cartTransformRun(input: RunInput): FunctionRunResult {
     //   2. Pricing component (carries the calculated price)
     // The bundle total shown to the customer = £0 + £calculatedPrice = £calculatedPrice ✅
     operations.push({
-      expand: {
+      lineExpand: {
         cartLineId: line.id,
         expandedCartItems: [
           {
