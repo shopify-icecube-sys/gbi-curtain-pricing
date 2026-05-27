@@ -1,20 +1,47 @@
 import { useEffect } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return null;
+  const { admin } = await authenticate.admin(request);
+
+
+  const query = `
+    query {
+      metafieldDefinitions(first: 50, ownerType: PRODUCT, namespace: "custom") {
+        edges {
+          node {
+            key
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await admin.graphql(query);
+    const data = await response.json();
+
+    const existingKeys = data.data?.metafieldDefinitions?.edges.map((e: any) => e.node.key) || [];
+    const requiredKeys = ["fabric_roll_width", "vertical_pattern_repeat", "fabric_cost_per_metre"];
+
+
+    const allExist = requiredKeys.every(key => existingKeys.includes(key));
+
+    return { metafieldsExist: allExist };
+  } catch (error) {
+    return { metafieldsExist: false };
+  }
 };
 
-// Ye action function tab chalega jab button click hoga
+
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
-  // GraphQL Mutation: Metafield definition create karne ke liye
   const CREATE_METAFIELD_DEFINITION = `
     mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
       metafieldDefinitionCreate(definition: $definition) {
@@ -30,7 +57,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   `;
 
-  // Aapke 3 required metafields
   const definitions = [
     {
       name: "Fabric Roll Width",
@@ -68,7 +94,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       });
       const data = await response.json();
 
-      // Agar pehle se bana hua hai (has already been taken), toh usko error na maane
       if (data.data?.metafieldDefinitionCreate?.userErrors?.length > 0) {
         errors.push(...data.data.metafieldDefinitionCreate.userErrors);
       } else {
@@ -86,9 +111,14 @@ export default function Index() {
   const fetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
+
+  const { metafieldsExist } = useLoaderData<typeof loader>();
+
   const isSubmitting = fetcher.state === "submitting" || fetcher.state === "loading";
 
-  // Toast notification dikhane ke liye
+
+  const isSetupComplete = metafieldsExist || fetcher.data?.success;
+
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
       if (fetcher.data.success) {
@@ -110,7 +140,6 @@ export default function Index() {
         </s-paragraph>
       </s-section>
 
-      {/* Ye naya Interactive Section hai Reviewers ke liye */}
       <s-section heading="1. App Setup (Required)">
         <s-paragraph>
           Before using the app, you need to create the required metafields for your products.
@@ -119,18 +148,22 @@ export default function Index() {
 
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
           <s-button
-            variant="primary"
+            variant={isSetupComplete ? "secondary" : "primary"}
             onClick={() => fetcher.submit({}, { method: "post" })}
             loading={isSubmitting ? true : undefined}
+            disabled={isSetupComplete ? true : undefined}
           >
-            {isSubmitting ? "Setting up..." : "Initialize Required Metafields"}
+            {isSubmitting
+              ? "Setting up..."
+              : isSetupComplete
+                ? "Metafields Setup Complete ✅"
+                : "Initialize Required Metafields"}
           </s-button>
         </div>
 
-
         <s-paragraph>
           <s-text tone="neutral">
-            This will create: <b>custom.fabric_roll_width</b> (Integer), <b>custom.vertical_pattern_repeat</b> (Integer), and <b>custom.fabric_cost_per_metre</b> (Decimal).
+            This creates: <b>custom.fabric_roll_width</b> (Integer), <b>custom.vertical_pattern_repeat</b> (Integer), and <b>custom.fabric_cost_per_metre</b> (Decimal).
           </s-text>
         </s-paragraph>
       </s-section>
