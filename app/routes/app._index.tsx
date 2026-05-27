@@ -137,6 +137,62 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
+  if (actionType === "activate_cart_transform") {
+    try {
+      // 1. Get the Function ID
+      const GET_FUNCTIONS = `
+        query {
+          shopifyFunctions(first: 10) {
+            nodes {
+              id
+              apiType
+              title
+            }
+          }
+        }
+      `;
+      const funcRes = await admin.graphql(GET_FUNCTIONS);
+      const funcData = await funcRes.json() as any;
+      
+      const cartFunction = funcData.data?.shopifyFunctions?.nodes?.find(
+        (f: any) => f.apiType === "cart_transform" || f.title.includes("pricing") || f.title.includes("gbi") || f.id.includes("cart_transform")
+      );
+
+      if (!cartFunction) {
+        return { success: false, errors: [{ message: "Cart Transform function not found. Did you deploy the extension?" }] };
+      }
+
+      // 2. Create the Cart Transform
+      const CREATE_TRANSFORM = `
+        mutation cartTransformCreate($functionId: String!) {
+          cartTransformCreate(functionId: $functionId) {
+            cartTransform {
+              id
+              functionId
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      const res = await admin.graphql(CREATE_TRANSFORM, {
+        variables: { functionId: cartFunction.id }
+      });
+      const data = await res.json() as any;
+      
+      if (data.data?.cartTransformCreate?.userErrors?.length > 0) {
+        return { success: false, errors: data.data.cartTransformCreate.userErrors };
+      }
+
+      return { success: true, type: "cart_transform_activated" };
+    } catch (error: any) {
+      console.error("Caught error:", error);
+      return { success: false, errors: [{ message: error.message || "Unknown error" }] };
+    }
+  }
 
   const CREATE_METAFIELD_DEFINITION = `
     mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
@@ -221,8 +277,10 @@ export default function Index() {
       if (fetcher.data.success) {
         if (fetcher.data.type === "product_created") {
           shopify.toast.show("Demo product created successfully!");
-        } else {
+        } else if (fetcher.data.type === "metafields_created") {
           shopify.toast.show("Metafields initialized successfully!");
+        } else if (fetcher.data.type === "cart_transform_activated") {
+          shopify.toast.show("Cart Transform Activated! Pricing is now live.");
         }
       } else {
         const errorMsg = fetcher.data.errors && fetcher.data.errors.length > 0
@@ -317,6 +375,21 @@ export default function Index() {
           <s-list-item>The Cart Transform function automatically reads the metafields and calculates the final price at checkout.</s-list-item>
         </s-unordered-list>
       </s-section>
+      <s-section heading="3. Activate Backend Pricing">
+        <s-paragraph>
+          Cart Transform (Function) extensions must be explicitly activated on the store after deployment.
+          Click the button below to turn on the custom pricing backend.
+        </s-paragraph>
+        <div style={{ marginTop: '15px' }}>
+          <s-button
+            onClick={() => fetcher.submit({ _action: "activate_cart_transform" }, { method: "post" })}
+            loading={fetcher.state === "submitting" ? true : undefined}
+          >
+            Activate Pricing Backend
+          </s-button>
+        </div>
+      </s-section>
+
     </s-page>
   );
 }
