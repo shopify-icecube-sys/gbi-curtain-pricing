@@ -45,19 +45,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const actionType = formData.get("_action");
 
   if (actionType === "create_demo_product") {
-    const linings = ["Standard Ivory", "Blackout", "Thermal Lining"];
-    const styles = ["Eyelet", "Goblet Pleat", "Pinch Pleat", "Wave", "3inch Pencil Pleat", "6inch Pencil Pleat"];
-    
-    const variants = [];
-    for (const l of linings) {
-      for (const s of styles) {
-        variants.push({ options: [l, s], price: 0 });
-      }
-    }
-
     const CREATE_PRODUCT_MUTATION = `
-      mutation CreateDemoProduct($input: ProductInput!) {
-        productCreate(input: $input) {
+      mutation CreateDemoProduct($input: ProductSetInput!) {
+        productSet(input: $input) {
           product {
             id
             handle
@@ -73,12 +63,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const productInput = {
       title: "Ashley Wilde Borneo Stone Curtain Test",
       status: "ACTIVE",
-      options: ["Lining", "Style"],
-      variants: variants,
-      metafields: [
-        {namespace: "custom", key: "fabric_roll_width", value: "140", type: "number_integer"},
-        {namespace: "custom", key: "vertical_pattern_repeat", value: "25", type: "number_integer"},
-        {namespace: "custom", key: "fabric_cost_per_metre", value: "20.0", type: "number_decimal"}
+      productOptions: [
+        {
+          name: "Lining",
+          values: [{name: "Standard Ivory"}, {name: "Blackout"}, {name: "Thermal Lining"}]
+        },
+        {
+          name: "Style",
+          values: [{name: "Eyelet"}, {name: "Goblet Pleat"}, {name: "Pinch Pleat"}, {name: "Wave"}, {name: "3inch Pencil Pleat"}, {name: "6inch Pencil Pleat"}]
+        }
       ]
     };
 
@@ -86,14 +79,44 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const response = await admin.graphql(CREATE_PRODUCT_MUTATION, {
         variables: { input: productInput }
       });
-      const data = await response.json();
+      const data = await response.json() as any;
       
-      if (data.data?.productCreate?.userErrors?.length > 0) {
-        return { success: false, errors: data.data.productCreate.userErrors };
+      if (data.data?.productSet?.userErrors?.length > 0) {
+        console.error("GraphQL UserErrors:", data.data.productSet.userErrors);
+        return { success: false, errors: data.data.productSet.userErrors };
       }
-      return { success: true, productHandle: data.data?.productCreate?.product?.handle, type: "product_created" };
-    } catch (error) {
-      return { success: false, errors: [error] };
+      
+      if (data.errors) {
+        console.error("GraphQL Errors:", data.errors);
+        return { success: false, errors: data.errors };
+      }
+      
+      const productId = data.data?.productSet?.product?.id;
+      
+      // Step 2: Set metafields on the new product
+      if (productId) {
+        const SET_METAFIELDS_MUTATION = `
+          mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+            metafieldsSet(metafields: $metafields) {
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `;
+        const metafields = [
+          {ownerId: productId, namespace: "custom", key: "fabric_roll_width", value: "140", type: "number_integer"},
+          {ownerId: productId, namespace: "custom", key: "vertical_pattern_repeat", value: "25", type: "number_integer"},
+          {ownerId: productId, namespace: "custom", key: "fabric_cost_per_metre", value: "20.0", type: "number_decimal"}
+        ];
+        await admin.graphql(SET_METAFIELDS_MUTATION, { variables: { metafields } });
+      }
+      
+      return { success: true, productHandle: data.data?.productSet?.product?.handle, type: "product_created" };
+    } catch (error: any) {
+      console.error("Caught error:", error);
+      return { success: false, errors: [{ message: error.message || "Unknown error" }] };
     }
   }
 
