@@ -16,6 +16,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           node { key }
         }
       }
+      shopMetafieldDefs: metafieldDefinitions(first: 10, ownerType: SHOP, namespace: "gbi_curtain_pricing") {
+        edges {
+          node { key }
+        }
+      }
       cartTransforms(first: 5) {
         nodes {
           id
@@ -46,11 +51,33 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const cartTransformActive = (data.data?.cartTransforms?.nodes?.length ?? 0) > 0;
     const demoProductExists = (data.data?.products?.nodes?.length ?? 0) > 0;
-    const pricingComponentExists = !!data.data?.shop?.metafield?.value;
 
-    return { metafieldsExist: allExist, cartTransformActive, demoProductExists, pricingComponentExists };
+    const componentVariantId = data.data?.shop?.metafield?.value || null;
+
+    // Check if shop metafield DEFINITION exists (required for Shopify Functions to read it)
+    const shopMetaDefKeys = data.data?.shopMetafieldDefs?.edges.map((e: any) => e.node.key) || [];
+    const componentMetaDefExists = shopMetaDefKeys.includes("component_variant_id");
+
+    // Component is truly ready only when BOTH the value exists AND the definition exists
+    const pricingComponentExists = !!componentVariantId && componentMetaDefExists;
+
+    return {
+      metafieldsExist: allExist,
+      cartTransformActive,
+      demoProductExists,
+      pricingComponentExists,
+      componentVariantId,
+      componentMetaDefExists,
+    };
   } catch (error) {
-    return { metafieldsExist: false, cartTransformActive: false, demoProductExists: false, pricingComponentExists: false };
+    return {
+      metafieldsExist: false,
+      cartTransformActive: false,
+      demoProductExists: false,
+      pricingComponentExists: false,
+      componentVariantId: null,
+      componentMetaDefExists: false,
+    };
   }
 };
 
@@ -145,8 +172,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  // ─── Step 3: Create Pricing Component ─────────────────────────────────────
-  if (actionType === "create_pricing_component") {
+  // ─── Step 3: Create / Refresh Pricing Component ──────────────────────────
+  if (actionType === "create_pricing_component" || actionType === "refresh_pricing_component") {
     try {
       // 1. Get shop ID + Online Store publication ID together
       const SHOP_AND_PUBS = `
@@ -164,35 +191,49 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         (p: any) => p.name === "Online Store"
       );
 
-      // 2. Create the hidden "Curtain Pricing Component" product
-      const CREATE_COMPONENT = `
-        mutation CreatePricingComponent($input: ProductSetInput!) {
-          productSet(input: $input) {
-            product { id }
-            userErrors { field message }
+      // 2. Check if "Curtain Pricing Component" already exists (idempotent)
+      const FIND_COMPONENT = `
+        query {
+          products(first: 1, query: "title:'Curtain Pricing Component'") {
+            nodes { id }
           }
         }
       `;
-      const compRes = await admin.graphql(CREATE_COMPONENT, {
-        variables: {
-          input: {
-            title: "Curtain Pricing Component",
-            status: "ACTIVE",
-          }
-        }
-      });
-      const compData = await compRes.json() as any;
+      const findRes = await admin.graphql(FIND_COMPONENT);
+      const findData = await findRes.json() as any;
+      let productId = findData.data?.products?.nodes?.[0]?.id;
 
-      if (compData.data?.productSet?.userErrors?.length > 0) {
-        return { success: false, errors: compData.data.productSet.userErrors };
-      }
-
-      const productId = compData.data?.productSet?.product?.id;
+      // 3. Create product only if it doesn't exist
       if (!productId) {
-        return { success: false, errors: [{ message: "Failed to create pricing component product." }] };
+        const CREATE_COMPONENT = `
+          mutation CreatePricingComponent($input: ProductSetInput!) {
+            productSet(input: $input) {
+              product { id }
+              userErrors { field message }
+            }
+          }
+        `;
+        const compRes = await admin.graphql(CREATE_COMPONENT, {
+          variables: {
+            input: {
+              title: "Curtain Pricing Component",
+              status: "ACTIVE",
+            }
+          }
+        });
+        const compData = await compRes.json() as any;
+
+        if (compData.data?.productSet?.userErrors?.length > 0) {
+          return { success: false, errors: compData.data.productSet.userErrors };
+        }
+
+        productId = compData.data?.productSet?.product?.id;
+        if (!productId) {
+          return { success: false, errors: [{ message: "Failed to create pricing component product." }] };
+        }
       }
 
-      // 3. Publish to Online Store so Cart Transform expand can access it
+      // 4. Publish to Online Store (safe to call even if already published)
       if (onlineStorePub) {
         const PUBLISH = `
           mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
@@ -209,7 +250,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         });
       }
 
-      // 4. Get the first variant ID
+      // 5. Get the current variant ID (always fresh — in case product was recreated)
       const GET_VARIANT = `
         query GetVariant($id: ID!) {
           product(id: $id) {
@@ -225,10 +266,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return { success: false, errors: [{ message: "Could not retrieve variant ID from pricing component." }] };
       }
 
-      // 5. Store variant ID in shop metafield (requires write_metafields scope)
+      // 6. Create shop metafield DEFINITION (required for Shopify Functions to read it).
+      //    Ignore "already exists" errors — this is idempotent.
+      const CREATE_SHOP_META_DEF = `
+        mutation CreateShopMetafieldDef($definition: MetafieldDefinitionInput!) {
+          metafieldDefinitionCreate(definition: $definition) {
+            createdDefinition { id }
+            userErrors { field message code }
+          }
+        }
+      `;
+      await admin.graphql(CREATE_SHOP_META_DEF, {
+        variables: {
+          definition: {
+            name: "GBI Pricing Component Variant ID",
+            namespace: "gbi_curtain_pricing",
+            key: "component_variant_id",
+            description: "Variant ID used by Cart Transform function to apply calculated prices",
+            type: "single_line_text_field",
+            ownerType: "SHOP",
+          }
+        }
+      });
+      // (errors intentionally ignored — definition may already exist)
+
+      // 7. Store the CURRENT variant ID in the shop metafield
       const SET_SHOP_METAFIELD = `
         mutation SetShopMetafield($metafields: [MetafieldsSetInput!]!) {
           metafieldsSet(metafields: $metafields) {
+            metafields { key value }
             userErrors { field message }
           }
         }
@@ -249,7 +315,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return { success: false, errors: metafieldData.data.metafieldsSet.userErrors };
       }
 
-      return { success: true, type: "pricing_component_created" };
+      const storedValue = metafieldData.data?.metafieldsSet?.metafields?.[0]?.value;
+      return { success: true, type: "pricing_component_created", variantId: storedValue || variantId };
     } catch (error: any) {
       console.error("create_pricing_component error:", error);
       return { success: false, errors: [{ message: error.message || "Unknown error" }] };
@@ -346,12 +413,22 @@ export default function Index() {
   const transformFetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
-  const { metafieldsExist, cartTransformActive, demoProductExists, pricingComponentExists } = useLoaderData<typeof loader>();
+  const {
+    metafieldsExist,
+    cartTransformActive,
+    demoProductExists,
+    pricingComponentExists,
+    componentVariantId,
+    componentMetaDefExists,
+  } = useLoaderData<typeof loader>();
 
   const isSetupComplete = metafieldsExist || (metafieldFetcher.data?.type === "metafields_created" && metafieldFetcher.data?.success);
   const productCreated = demoProductExists || (productFetcher.data?.type === "product_created" && productFetcher.data?.success);
   const pricingComponentCreated = pricingComponentExists || (componentFetcher.data?.type === "pricing_component_created" && componentFetcher.data?.success);
   const transformActivated = cartTransformActive || (transformFetcher.data?.type === "cart_transform_activated" && transformFetcher.data?.success);
+
+  // Show stored variant ID (from action response or loader)
+  const latestVariantId = (componentFetcher.data as any)?.variantId || componentVariantId;
 
   useEffect(() => {
     if (metafieldFetcher.data && metafieldFetcher.state === "idle") {
@@ -369,8 +446,14 @@ export default function Index() {
 
   useEffect(() => {
     if (componentFetcher.data && componentFetcher.state === "idle") {
-      if (componentFetcher.data.success) shopify.toast.show("Pricing Component created! Pricing engine is ready.");
-      else shopify.toast.show(componentFetcher.data.errors?.[0]?.message ?? "Error", { isError: true });
+      if (componentFetcher.data.success) {
+        const msg = (componentFetcher.data as any)?.variantId
+          ? `✅ Pricing Component synced! Variant: ${(componentFetcher.data as any).variantId.split("/").pop()}`
+          : "Pricing Component ready! Cart Transform engine is now active.";
+        shopify.toast.show(msg);
+      } else {
+        shopify.toast.show(componentFetcher.data.errors?.[0]?.message ?? "Error", { isError: true });
+      }
     }
   }, [componentFetcher.data, componentFetcher.state, shopify]);
 
@@ -426,24 +509,41 @@ export default function Index() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <s-button variant="secondary" disabled>Pricing Component Ready ✅</s-button>
               <s-text tone="success">
-                Component product created. The Cart Transform engine is ready to apply calculated prices.
+                Component product created. Metafield definition exists — Cart Transform engine can apply calculated prices.
               </s-text>
+              {latestVariantId && (
+                <s-text tone="neutral">
+                  Stored Variant ID: <b>{latestVariantId}</b>
+                </s-text>
+              )}
+              {/* Refresh button — re-sync variant ID if product was deleted/recreated */}
+              <s-button
+                variant="secondary"
+                onClick={() => componentFetcher.submit({ _action: "refresh_pricing_component" }, { method: "post" })}
+                loading={componentFetcher.state === "submitting" ? true : undefined}
+              >
+                {componentFetcher.state === "submitting" ? "Refreshing..." : "🔄 Refresh / Re-sync Pricing Component"}
+              </s-button>
             </div>
           ) : (
-            <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Show warning if value exists but definition is missing */}
+              {componentVariantId && !componentMetaDefExists && (
+                <s-text tone="critical">
+                  ⚠️ Variant ID is stored but metafield definition is missing — Cart Transform Function cannot read it! Click below to fix.
+                </s-text>
+              )}
               <s-button
                 onClick={() => componentFetcher.submit({ _action: "create_pricing_component" }, { method: "post" })}
                 loading={componentFetcher.state === "submitting" ? true : undefined}
                 disabled={!isSetupComplete ? true : undefined}
               >
-                {componentFetcher.state === "submitting" ? "Creating Component..." : "Create Pricing Component"}
+                {componentFetcher.state === "submitting" ? "Setting up..." : componentVariantId ? "Fix & Re-sync Pricing Component" : "Create Pricing Component"}
               </s-button>
               {!isSetupComplete && (
-                <div style={{ marginTop: '5px' }}>
-                  <s-text tone="critical">Please complete Step 1 first.</s-text>
-                </div>
+                <s-text tone="critical">Please complete Step 1 first.</s-text>
               )}
-            </>
+            </div>
           )}
         </div>
       </s-section>
