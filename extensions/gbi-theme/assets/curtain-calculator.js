@@ -122,14 +122,11 @@ function runGbiCalculation() {
       priceDisplay.innerText = formattedPrice;
       priceDisplay.style.opacity = '1';
       
-      // Update the permanent hidden input (always part of the form via form= attribute)
-      const calcPriceInput = document.getElementById('gbi-calculated-price-input');
-      if (calcPriceInput) {
-        calcPriceInput.value = finalPrice.toFixed(2);
-        console.log('[GBI] _calculated_price set to:', calcPriceInput.value);
-      } else {
-        console.warn('[GBI] Could not find #gbi-calculated-price-input');
-      }
+      // Crucial: Inject hidden property into the product form so it goes to cart
+      // We must inject directly into the DOM form because AJAX themes often ignore the `form=` attribute.
+      injectHiddenPropertyToForm('_calculated_price', finalPrice.toFixed(2));
+      injectHiddenPropertyToForm('Width (cm)', width);
+      injectHiddenPropertyToForm('Drop (cm)', drop);
       
     }, 50);
   }
@@ -137,7 +134,10 @@ function runGbiCalculation() {
 
 function injectHiddenPropertyToForm(propertyName, propertyValue) {
   const form = document.querySelector('form[action*="/cart/add"]');
-  if (!form) return;
+  if (!form) {
+    console.warn('[GBI] Add to cart form not found.');
+    return;
+  }
 
   let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
   if (!existingInput) {
@@ -147,6 +147,7 @@ function injectHiddenPropertyToForm(propertyName, propertyValue) {
     form.appendChild(existingInput);
   }
   existingInput.value = propertyValue;
+  console.log(`[GBI] Injected ${propertyName} = ${propertyValue} into cart form`);
 }
 
 document.addEventListener('DOMContentLoaded', function() {

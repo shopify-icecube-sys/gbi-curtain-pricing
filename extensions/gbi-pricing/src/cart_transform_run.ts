@@ -20,16 +20,25 @@ export function cartTransformRun(input: RunInput): FunctionRunResult {
         operations.push({
           update: {
             cartLineId: line.id,
+            title: `GBI Price: £${calculatedPrice.toFixed(2)}`,
             price: {
               adjustment: {
                 fixedPricePerUnit: {
-                  amount: calculatedPrice.toString()
+                  amount: calculatedPrice.toFixed(2)
                 }
               }
             }
           }
         });
       }
+    } else {
+      // DEBUG: Visual indicator that the function ran but found no attribute
+      operations.push({
+        update: {
+          cartLineId: line.id,
+          title: `[GBI Error] No Price Found`
+        }
+      });
     }
   }
 
