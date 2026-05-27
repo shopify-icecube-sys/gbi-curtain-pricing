@@ -148,18 +148,27 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // ─── Step 3: Create Pricing Component ─────────────────────────────────────
   if (actionType === "create_pricing_component") {
     try {
-      // 1. Get the shop GID (needed for metafield owner)
-      const shopRes = await admin.graphql(`query { shop { id } }`);
+      // 1. Get shop ID + Online Store publication ID together
+      const SHOP_AND_PUBS = `
+        query {
+          shop { id }
+          publications(first: 10) {
+            nodes { id name }
+          }
+        }
+      `;
+      const shopRes = await admin.graphql(SHOP_AND_PUBS);
       const shopData = await shopRes.json() as any;
       const shopId = shopData.data?.shop?.id;
+      const onlineStorePub = shopData.data?.publications?.nodes?.find(
+        (p: any) => p.name === "Online Store"
+      );
 
       // 2. Create the hidden "Curtain Pricing Component" product
       const CREATE_COMPONENT = `
         mutation CreatePricingComponent($input: ProductSetInput!) {
           productSet(input: $input) {
-            product {
-              id
-            }
+            product { id }
             userErrors { field message }
           }
         }
@@ -183,13 +192,28 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return { success: false, errors: [{ message: "Failed to create pricing component product." }] };
       }
 
-      // 3. Get the first variant ID from the created product
+      // 3. Publish to Online Store so Cart Transform expand can access it
+      if (onlineStorePub) {
+        const PUBLISH = `
+          mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+            publishablePublish(id: $id, input: $input) {
+              userErrors { field message }
+            }
+          }
+        `;
+        await admin.graphql(PUBLISH, {
+          variables: {
+            id: productId,
+            input: [{ publicationId: onlineStorePub.id }]
+          }
+        });
+      }
+
+      // 4. Get the first variant ID
       const GET_VARIANT = `
         query GetVariant($id: ID!) {
           product(id: $id) {
-            variants(first: 1) {
-              nodes { id }
-            }
+            variants(first: 1) { nodes { id } }
           }
         }
       `;
@@ -201,7 +225,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return { success: false, errors: [{ message: "Could not retrieve variant ID from pricing component." }] };
       }
 
-      // 4. Store variant ID in shop metafield so the Cart Transform Function can read it
+      // 5. Store variant ID in shop metafield (requires write_metafields scope)
       const SET_SHOP_METAFIELD = `
         mutation SetShopMetafield($metafields: [MetafieldsSetInput!]!) {
           metafieldsSet(metafields: $metafields) {
@@ -227,9 +251,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       return { success: true, type: "pricing_component_created" };
     } catch (error: any) {
+      console.error("create_pricing_component error:", error);
       return { success: false, errors: [{ message: error.message || "Unknown error" }] };
     }
   }
+
 
   // ─── Step 4: Activate Cart Transform ──────────────────────────────────────
   if (actionType === "activate_cart_transform") {
