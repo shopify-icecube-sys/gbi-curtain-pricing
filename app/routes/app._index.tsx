@@ -28,6 +28,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
           title
         }
       }
+      shop {
+        metafield(namespace: "gbi_curtain_pricing", key: "component_variant_id") {
+          value
+        }
+      }
     }
   `;
 
@@ -41,10 +46,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     const cartTransformActive = (data.data?.cartTransforms?.nodes?.length ?? 0) > 0;
     const demoProductExists = (data.data?.products?.nodes?.length ?? 0) > 0;
+    const pricingComponentExists = !!data.data?.shop?.metafield?.value;
 
-    return { metafieldsExist: allExist, cartTransformActive, demoProductExists };
+    return { metafieldsExist: allExist, cartTransformActive, demoProductExists, pricingComponentExists };
   } catch (error) {
-    return { metafieldsExist: false, cartTransformActive: false, demoProductExists: false };
+    return { metafieldsExist: false, cartTransformActive: false, demoProductExists: false, pricingComponentExists: false };
   }
 };
 
@@ -54,6 +60,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const actionType = formData.get("_action");
 
+  // ─── Step 2: Create Demo Curtain Product ───────────────────────────────────
   if (actionType === "create_demo_product") {
     const linings = ["Standard Ivory", "Blackout", "Thermal Lining"];
     const styles = ["Eyelet", "Goblet Pleat", "Pinch Pleat", "Wave", "3inch Pencil Pleat", "6inch Pencil Pleat"];
@@ -109,26 +116,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const data = await response.json() as any;
 
       if (data.data?.productSet?.userErrors?.length > 0) {
-        console.error("GraphQL UserErrors:", data.data.productSet.userErrors);
         return { success: false, errors: data.data.productSet.userErrors };
       }
-
       if (data.errors) {
-        console.error("GraphQL Errors:", data.errors);
         return { success: false, errors: data.errors };
       }
 
       const productId = data.data?.productSet?.product?.id;
-
-      // Step 2: Set metafields on the new product
       if (productId) {
         const SET_METAFIELDS_MUTATION = `
           mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) {
             metafieldsSet(metafields: $metafields) {
-              userErrors {
-                field
-                message
-              }
+              userErrors { field message }
             }
           }
         `;
@@ -142,60 +141,130 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       return { success: true, productHandle: data.data?.productSet?.product?.handle, type: "product_created" };
     } catch (error: any) {
-      console.error("Caught error:", error);
       return { success: false, errors: [{ message: error.message || "Unknown error" }] };
     }
   }
 
+  // ─── Step 3: Create Pricing Component ─────────────────────────────────────
+  if (actionType === "create_pricing_component") {
+    try {
+      // 1. Get the shop GID (needed for metafield owner)
+      const shopRes = await admin.graphql(`query { shop { id } }`);
+      const shopData = await shopRes.json() as any;
+      const shopId = shopData.data?.shop?.id;
+
+      // 2. Create the hidden "Curtain Pricing Component" product
+      const CREATE_COMPONENT = `
+        mutation CreatePricingComponent($input: ProductSetInput!) {
+          productSet(input: $input) {
+            product {
+              id
+            }
+            userErrors { field message }
+          }
+        }
+      `;
+      const compRes = await admin.graphql(CREATE_COMPONENT, {
+        variables: {
+          input: {
+            title: "Curtain Pricing Component",
+            status: "ACTIVE",
+          }
+        }
+      });
+      const compData = await compRes.json() as any;
+
+      if (compData.data?.productSet?.userErrors?.length > 0) {
+        return { success: false, errors: compData.data.productSet.userErrors };
+      }
+
+      const productId = compData.data?.productSet?.product?.id;
+      if (!productId) {
+        return { success: false, errors: [{ message: "Failed to create pricing component product." }] };
+      }
+
+      // 3. Get the first variant ID from the created product
+      const GET_VARIANT = `
+        query GetVariant($id: ID!) {
+          product(id: $id) {
+            variants(first: 1) {
+              nodes { id }
+            }
+          }
+        }
+      `;
+      const variantRes = await admin.graphql(GET_VARIANT, { variables: { id: productId } });
+      const variantData = await variantRes.json() as any;
+      const variantId = variantData.data?.product?.variants?.nodes?.[0]?.id;
+
+      if (!variantId) {
+        return { success: false, errors: [{ message: "Could not retrieve variant ID from pricing component." }] };
+      }
+
+      // 4. Store variant ID in shop metafield so the Cart Transform Function can read it
+      const SET_SHOP_METAFIELD = `
+        mutation SetShopMetafield($metafields: [MetafieldsSetInput!]!) {
+          metafieldsSet(metafields: $metafields) {
+            userErrors { field message }
+          }
+        }
+      `;
+      const metafieldRes = await admin.graphql(SET_SHOP_METAFIELD, {
+        variables: {
+          metafields: [{
+            ownerId: shopId,
+            namespace: "gbi_curtain_pricing",
+            key: "component_variant_id",
+            value: variantId,
+            type: "single_line_text_field"
+          }]
+        }
+      });
+      const metafieldData = await metafieldRes.json() as any;
+      if (metafieldData.data?.metafieldsSet?.userErrors?.length > 0) {
+        return { success: false, errors: metafieldData.data.metafieldsSet.userErrors };
+      }
+
+      return { success: true, type: "pricing_component_created" };
+    } catch (error: any) {
+      return { success: false, errors: [{ message: error.message || "Unknown error" }] };
+    }
+  }
+
+  // ─── Step 4: Activate Cart Transform ──────────────────────────────────────
   if (actionType === "activate_cart_transform") {
     try {
-      // 1. Get the Function ID
       const GET_FUNCTIONS = `
         query {
           shopifyFunctions(first: 10) {
-            nodes {
-              id
-              apiType
-              title
-            }
+            nodes { id apiType title }
           }
         }
       `;
       const funcRes = await admin.graphql(GET_FUNCTIONS);
       const funcData = await funcRes.json() as any;
-      
+
       const cartFunction = funcData.data?.shopifyFunctions?.nodes?.find(
-        (f: any) => f.apiType === "cart_transform" || f.title.includes("pricing") || f.title.includes("gbi") || f.id.includes("cart_transform")
+        (f: any) => f.apiType === "cart_transform" || f.title.toLowerCase().includes("gbi")
       );
 
       if (!cartFunction) {
         return { success: false, errors: [{ message: "Cart Transform function not found. Did you deploy the extension?" }] };
       }
 
-      // 2. Create the Cart Transform
       const CREATE_TRANSFORM = `
         mutation cartTransformCreate($functionId: String!) {
           cartTransformCreate(functionId: $functionId) {
-            cartTransform {
-              id
-              functionId
-            }
-            userErrors {
-              field
-              message
-            }
+            cartTransform { id functionId }
+            userErrors { field message }
           }
         }
       `;
-      
-      const res = await admin.graphql(CREATE_TRANSFORM, {
-        variables: { functionId: cartFunction.id }
-      });
+      const res = await admin.graphql(CREATE_TRANSFORM, { variables: { functionId: cartFunction.id } });
       const data = await res.json() as any;
-      
+
       if (data.data?.cartTransformCreate?.userErrors?.length > 0) {
         const errMsg = data.data.cartTransformCreate.userErrors[0].message as string;
-        // If already registered, treat it as success
         if (errMsg.toLowerCase().includes("already")) {
           return { success: true, type: "cart_transform_activated" };
         }
@@ -204,51 +273,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       return { success: true, type: "cart_transform_activated" };
     } catch (error: any) {
-      console.error("Caught error:", error);
       return { success: false, errors: [{ message: error.message || "Unknown error" }] };
     }
   }
 
+  // ─── Step 1: Initialize Metafield Definitions ─────────────────────────────
   const CREATE_METAFIELD_DEFINITION = `
     mutation CreateMetafieldDefinition($definition: MetafieldDefinitionInput!) {
       metafieldDefinitionCreate(definition: $definition) {
-        createdDefinition {
-          id
-          name
-        }
-        userErrors {
-          field
-          message
-        }
+        createdDefinition { id name }
+        userErrors { field message }
       }
     }
   `;
 
   const definitions = [
-    {
-      name: "Fabric Roll Width",
-      namespace: "custom",
-      key: "fabric_roll_width",
-      description: "Width of the fabric roll",
-      type: "number_integer",
-      ownerType: "PRODUCT",
-    },
-    {
-      name: "Vertical Pattern Repeat",
-      namespace: "custom",
-      key: "vertical_pattern_repeat",
-      description: "Vertical pattern repeat size",
-      type: "number_integer",
-      ownerType: "PRODUCT",
-    },
-    {
-      name: "Fabric Cost Per Metre",
-      namespace: "custom",
-      key: "fabric_cost_per_metre",
-      description: "Cost of the fabric per metre",
-      type: "number_decimal",
-      ownerType: "PRODUCT",
-    }
+    { name: "Fabric Roll Width", namespace: "custom", key: "fabric_roll_width", description: "Width of the fabric roll", type: "number_integer", ownerType: "PRODUCT" },
+    { name: "Vertical Pattern Repeat", namespace: "custom", key: "vertical_pattern_repeat", description: "Vertical pattern repeat size", type: "number_integer", ownerType: "PRODUCT" },
+    { name: "Fabric Cost Per Metre", namespace: "custom", key: "fabric_cost_per_metre", description: "Cost of the fabric per metre", type: "number_decimal", ownerType: "PRODUCT" }
   ];
 
   let successCount = 0;
@@ -256,11 +298,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   for (const def of definitions) {
     try {
-      const response = await admin.graphql(CREATE_METAFIELD_DEFINITION, {
-        variables: { definition: def },
-      });
+      const response = await admin.graphql(CREATE_METAFIELD_DEFINITION, { variables: { definition: def } });
       const data = await response.json();
-
       if (data.data?.metafieldDefinitionCreate?.userErrors?.length > 0) {
         errors.push(...data.data.metafieldDefinitionCreate.userErrors);
       } else {
@@ -277,49 +316,42 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function Index() {
   const metafieldFetcher = useFetcher<typeof action>();
   const productFetcher = useFetcher<typeof action>();
+  const componentFetcher = useFetcher<typeof action>();
   const transformFetcher = useFetcher<typeof action>();
   const shopify = useAppBridge();
 
-  const { metafieldsExist, cartTransformActive, demoProductExists } = useLoaderData<typeof loader>();
+  const { metafieldsExist, cartTransformActive, demoProductExists, pricingComponentExists } = useLoaderData<typeof loader>();
 
   const isSetupComplete = metafieldsExist || (metafieldFetcher.data?.type === "metafields_created" && metafieldFetcher.data?.success);
-  // Derive from loader (persistent) OR from fetcher response (optimistic)
   const productCreated = demoProductExists || (productFetcher.data?.type === "product_created" && productFetcher.data?.success);
+  const pricingComponentCreated = pricingComponentExists || (componentFetcher.data?.type === "pricing_component_created" && componentFetcher.data?.success);
   const transformActivated = cartTransformActive || (transformFetcher.data?.type === "cart_transform_activated" && transformFetcher.data?.success);
 
-  // Metafield fetcher effect
   useEffect(() => {
     if (metafieldFetcher.data && metafieldFetcher.state === "idle") {
-      if (metafieldFetcher.data.success) {
-        shopify.toast.show("Metafields initialized successfully!");
-      } else {
-        const errorMsg = metafieldFetcher.data.errors?.[0]?.message ?? "Something went wrong";
-        shopify.toast.show(errorMsg, { isError: true });
-      }
+      if (metafieldFetcher.data.success) shopify.toast.show("Metafields initialized successfully!");
+      else shopify.toast.show(metafieldFetcher.data.errors?.[0]?.message ?? "Error", { isError: true });
     }
   }, [metafieldFetcher.data, metafieldFetcher.state, shopify]);
 
-  // Product fetcher effect
   useEffect(() => {
     if (productFetcher.data && productFetcher.state === "idle") {
-      if (productFetcher.data.success) {
-        shopify.toast.show("Demo product created successfully!");
-      } else {
-        const errorMsg = productFetcher.data.errors?.[0]?.message ?? "Something went wrong";
-        shopify.toast.show(errorMsg, { isError: true });
-      }
+      if (productFetcher.data.success) shopify.toast.show("Demo product created successfully!");
+      else shopify.toast.show(productFetcher.data.errors?.[0]?.message ?? "Error", { isError: true });
     }
   }, [productFetcher.data, productFetcher.state, shopify]);
 
-  // Transform fetcher effect
+  useEffect(() => {
+    if (componentFetcher.data && componentFetcher.state === "idle") {
+      if (componentFetcher.data.success) shopify.toast.show("Pricing Component created! Pricing engine is ready.");
+      else shopify.toast.show(componentFetcher.data.errors?.[0]?.message ?? "Error", { isError: true });
+    }
+  }, [componentFetcher.data, componentFetcher.state, shopify]);
+
   useEffect(() => {
     if (transformFetcher.data && transformFetcher.state === "idle") {
-      if (transformFetcher.data.success) {
-        shopify.toast.show("Cart Transform Activated! Pricing is now live.");
-      } else {
-        const errorMsg = transformFetcher.data.errors?.[0]?.message ?? "Something went wrong";
-        shopify.toast.show(errorMsg, { isError: true });
-      }
+      if (transformFetcher.data.success) shopify.toast.show("Cart Transform Activated! Pricing is now live.");
+      else shopify.toast.show(transformFetcher.data.errors?.[0]?.message ?? "Error", { isError: true });
     }
   }, [transformFetcher.data, transformFetcher.state, shopify]);
 
@@ -328,18 +360,17 @@ export default function Index() {
       <s-section heading="Welcome to GBI Curtain Pricing 🪟">
         <s-paragraph>
           GBI Curtain Pricing enables dynamic, rule-based pricing at checkout
-          for curtain products. Using Shopify's Cart Transform API, this app
-          automatically adjusts line item prices based on product dimensions,
-          fabric type, and custom configuration.
+          for curtain products. Using Shopify's Cart Transform API (lineExpand),
+          this app applies the calculated price as a bundle component—compatible
+          with all Shopify plans including Basic.
         </s-paragraph>
       </s-section>
 
+      {/* ── Step 1: Metafields ── */}
       <s-section heading="1. App Setup (Required)">
         <s-paragraph>
-          Before using the app, you need to create the required metafields for your products.
-          Click the button below to automatically create them in your store.
+          Create the required product metafields (fabric roll width, pattern repeat, fabric cost).
         </s-paragraph>
-
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
           <s-button
             variant={isSetupComplete ? "secondary" : "primary"}
@@ -347,49 +378,43 @@ export default function Index() {
             loading={metafieldFetcher.state === "submitting" ? true : undefined}
             disabled={isSetupComplete ? true : undefined}
           >
-            {metafieldFetcher.state === "submitting"
-              ? "Setting up..."
-              : isSetupComplete
-                ? "Metafields Setup Complete ✅"
-                : "Initialize Required Metafields"}
+            {metafieldFetcher.state === "submitting" ? "Setting up..." : isSetupComplete ? "Metafields Setup Complete ✅" : "Initialize Required Metafields"}
           </s-button>
         </div>
-
         <s-paragraph>
           <s-text tone="neutral">
-            This creates: <b>custom.fabric_roll_width</b> (Integer), <b>custom.vertical_pattern_repeat</b> (Integer), and <b>custom.fabric_cost_per_metre</b> (Decimal).
+            Creates: <b>custom.fabric_roll_width</b>, <b>custom.vertical_pattern_repeat</b>, <b>custom.fabric_cost_per_metre</b>.
           </s-text>
         </s-paragraph>
       </s-section>
 
-      <s-section heading="2. Create Demo Product">
+      {/* ── Step 2: Pricing Component ── */}
+      <s-section heading="2. Create Pricing Component (Required)">
         <s-paragraph>
-          To test the Cart Transform functionality, we need a product with the correct variants and metafields.
-          Click the button below to generate a Demo Curtain Product on this store.
+          This creates a hidden "Curtain Pricing Component" product in your store.
+          Its variant ID is stored as a shop metafield so the Cart Transform function
+          can use it to apply the calculated price at checkout—without needing Shopify Plus.
         </s-paragraph>
-
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
-          {productCreated ? (
+          {pricingComponentCreated ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <s-button variant="secondary" disabled>
-                Demo Product Created ✅
-              </s-button>
+              <s-button variant="secondary" disabled>Pricing Component Ready ✅</s-button>
               <s-text tone="success">
-                Product has been created! Go to Shopify Admin → Products to view and publish it.
+                Component product created. The Cart Transform engine is ready to apply calculated prices.
               </s-text>
             </div>
           ) : (
             <>
               <s-button
-                onClick={() => productFetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
-                loading={productFetcher.state === "submitting" ? true : undefined}
+                onClick={() => componentFetcher.submit({ _action: "create_pricing_component" }, { method: "post" })}
+                loading={componentFetcher.state === "submitting" ? true : undefined}
                 disabled={!isSetupComplete ? true : undefined}
               >
-                Create Demo Product
+                {componentFetcher.state === "submitting" ? "Creating Component..." : "Create Pricing Component"}
               </s-button>
               {!isSetupComplete && (
                 <div style={{ marginTop: '5px' }}>
-                  <s-text tone="critical">Please Initialize Metafields first (Step 1).</s-text>
+                  <s-text tone="critical">Please complete Step 1 first.</s-text>
                 </div>
               )}
             </>
@@ -397,16 +422,44 @@ export default function Index() {
         </div>
       </s-section>
 
-      <s-section heading="3. Activate Backend Pricing">
+      {/* ── Step 3: Demo Product ── */}
+      <s-section heading="3. Create Demo Curtain Product">
         <s-paragraph>
-          Cart Transform (Function) extensions must be explicitly activated on the store after deployment.
-          Click the button below to turn on the custom pricing backend.
+          Generate a test curtain product with all variant combinations (Lining × Style) pre-configured.
+        </s-paragraph>
+        <div style={{ marginTop: '15px', marginBottom: '15px' }}>
+          {productCreated ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <s-button variant="secondary" disabled>Demo Product Created ✅</s-button>
+              <s-text tone="success">Go to Shopify Admin → Products to view and assign the Calculator block.</s-text>
+            </div>
+          ) : (
+            <>
+              <s-button
+                onClick={() => productFetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
+                loading={productFetcher.state === "submitting" ? true : undefined}
+                disabled={!pricingComponentCreated ? true : undefined}
+              >
+                Create Demo Product
+              </s-button>
+              {!pricingComponentCreated && (
+                <div style={{ marginTop: '5px' }}>
+                  <s-text tone="critical">Please complete Step 2 first.</s-text>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </s-section>
+
+      {/* ── Step 4: Activate Backend ── */}
+      <s-section heading="4. Activate Backend Pricing">
+        <s-paragraph>
+          Register the Cart Transform function on this store. Must be done after every fresh deploy.
         </s-paragraph>
         <div style={{ marginTop: '15px' }}>
           {transformActivated ? (
-            <s-button variant="secondary" disabled>
-              Pricing Backend Active ✅
-            </s-button>
+            <s-button variant="secondary" disabled>Pricing Backend Active ✅</s-button>
           ) : (
             <s-button
               onClick={() => transformFetcher.submit({ _action: "activate_cart_transform" }, { method: "post" })}

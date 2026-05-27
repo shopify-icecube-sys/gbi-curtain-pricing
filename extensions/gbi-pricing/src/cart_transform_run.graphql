@@ -3,10 +3,8 @@ query RunInput {
     lines {
       id
       quantity
-      cost {
-        amountPerQuantity {
-          amount
-        }
+      attribute(key: "_calculated_price") {
+        value
       }
       merchandise {
         __typename
@@ -14,9 +12,11 @@ query RunInput {
           id
         }
       }
-      attribute(key: "_calculated_price") {
-        value
-      }
+    }
+  }
+  shop {
+    metafield(namespace: "gbi_curtain_pricing", key: "component_variant_id") {
+      value
     }
   }
 }
