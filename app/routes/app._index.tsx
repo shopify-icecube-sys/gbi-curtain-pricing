@@ -175,21 +175,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // ─── Step 3: Create / Refresh Pricing Component ──────────────────────────
   if (actionType === "create_pricing_component" || actionType === "refresh_pricing_component") {
     try {
-      // 1. Get shop ID + Online Store publication ID together
-      const SHOP_AND_PUBS = `
-        query {
-          shop { id }
-          publications(first: 10) {
-            nodes { id name }
-          }
-        }
-      `;
-      const shopRes = await admin.graphql(SHOP_AND_PUBS);
+      // 1. Get shop ID only (no publications query — avoids read_publications scope)
+      const GET_SHOP_ID = `query { shop { id } }`;
+      const shopRes = await admin.graphql(GET_SHOP_ID);
       const shopData = await shopRes.json() as any;
       const shopId = shopData.data?.shop?.id;
-      const onlineStorePub = shopData.data?.publications?.nodes?.find(
-        (p: any) => p.name === "Online Store"
-      );
 
       // 2. Check if "Curtain Pricing Component" already exists (idempotent)
       const FIND_COMPONENT = `
@@ -204,6 +194,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       let productId = findData.data?.products?.nodes?.[0]?.id;
 
       // 3. Create product only if it doesn't exist
+      //    status: ACTIVE is sufficient for Cart Transform lineExpand to use it as a component
       if (!productId) {
         const CREATE_COMPONENT = `
           mutation CreatePricingComponent($input: ProductSetInput!) {
@@ -231,23 +222,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         if (!productId) {
           return { success: false, errors: [{ message: "Failed to create pricing component product." }] };
         }
-      }
-
-      // 4. Publish to Online Store (safe to call even if already published)
-      if (onlineStorePub) {
-        const PUBLISH = `
-          mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
-            publishablePublish(id: $id, input: $input) {
-              userErrors { field message }
-            }
-          }
-        `;
-        await admin.graphql(PUBLISH, {
-          variables: {
-            id: productId,
-            input: [{ publicationId: onlineStorePub.id }]
-          }
-        });
       }
 
       // 5. Get the current variant ID (always fresh — in case product was recreated)
