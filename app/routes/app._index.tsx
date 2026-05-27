@@ -47,7 +47,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (actionType === "create_demo_product") {
     const linings = ["Standard Ivory", "Blackout", "Thermal Lining"];
     const styles = ["Eyelet", "Goblet Pleat", "Pinch Pleat", "Wave", "3inch Pencil Pleat", "6inch Pencil Pleat"];
-    
+
     const variants = [];
     for (const l of linings) {
       for (const s of styles) {
@@ -82,11 +82,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       productOptions: [
         {
           name: "Lining",
-          values: [{name: "Standard Ivory"}, {name: "Blackout"}, {name: "Thermal Lining"}]
+          values: [{ name: "Standard Ivory" }, { name: "Blackout" }, { name: "Thermal Lining" }]
         },
         {
           name: "Style",
-          values: [{name: "Eyelet"}, {name: "Goblet Pleat"}, {name: "Pinch Pleat"}, {name: "Wave"}, {name: "3inch Pencil Pleat"}, {name: "6inch Pencil Pleat"}]
+          values: [{ name: "Eyelet" }, { name: "Goblet Pleat" }, { name: "Pinch Pleat" }, { name: "Wave" }, { name: "3inch Pencil Pleat" }, { name: "6inch Pencil Pleat" }]
         }
       ],
       variants: variants
@@ -97,19 +97,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         variables: { input: productInput }
       });
       const data = await response.json() as any;
-      
+
       if (data.data?.productSet?.userErrors?.length > 0) {
         console.error("GraphQL UserErrors:", data.data.productSet.userErrors);
         return { success: false, errors: data.data.productSet.userErrors };
       }
-      
+
       if (data.errors) {
         console.error("GraphQL Errors:", data.errors);
         return { success: false, errors: data.errors };
       }
-      
+
       const productId = data.data?.productSet?.product?.id;
-      
+
       // Step 2: Set metafields on the new product
       if (productId) {
         const SET_METAFIELDS_MUTATION = `
@@ -123,13 +123,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           }
         `;
         const metafields = [
-          {ownerId: productId, namespace: "custom", key: "fabric_roll_width", value: "140", type: "number_integer"},
-          {ownerId: productId, namespace: "custom", key: "vertical_pattern_repeat", value: "25", type: "number_integer"},
-          {ownerId: productId, namespace: "custom", key: "fabric_cost_per_metre", value: "20.0", type: "number_decimal"}
+          { ownerId: productId, namespace: "custom", key: "fabric_roll_width", value: "140", type: "number_integer" },
+          { ownerId: productId, namespace: "custom", key: "vertical_pattern_repeat", value: "25", type: "number_integer" },
+          { ownerId: productId, namespace: "custom", key: "fabric_cost_per_metre", value: "20.0", type: "number_decimal" }
         ];
         await admin.graphql(SET_METAFIELDS_MUTATION, { variables: { metafields } });
       }
-      
+
       return { success: true, productHandle: data.data?.productSet?.product?.handle, type: "product_created" };
     } catch (error: any) {
       console.error("Caught error:", error);
@@ -212,8 +212,9 @@ export default function Index() {
 
   const isSubmitting = fetcher.state === "submitting" || fetcher.state === "loading";
 
-
-  const isSetupComplete = metafieldsExist || fetcher.data?.success;
+  const isSetupComplete = metafieldsExist || (fetcher.data?.type === "metafields_created" && fetcher.data?.success);
+  const isProductCreated = fetcher.data?.type === "product_created" && fetcher.data?.success;
+  const productHandle = fetcher.data?.productHandle;
 
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
@@ -224,8 +225,8 @@ export default function Index() {
           shopify.toast.show("Metafields initialized successfully!");
         }
       } else {
-        const errorMsg = fetcher.data.errors && fetcher.data.errors.length > 0 
-          ? fetcher.data.errors[0].message 
+        const errorMsg = fetcher.data.errors && fetcher.data.errors.length > 0
+          ? fetcher.data.errors[0].message
           : "Something went wrong";
         shopify.toast.show(errorMsg, { isError: true });
       }
@@ -278,17 +279,33 @@ export default function Index() {
         </s-paragraph>
 
         <div style={{ marginTop: '15px', marginBottom: '15px' }}>
-          <s-button
-            onClick={() => fetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
-            loading={fetcher.state === "submitting" ? true : undefined}
-            disabled={!isSetupComplete ? true : undefined}
-          >
-            Create Demo Product
-          </s-button>
-          {!isSetupComplete && (
-            <div style={{ marginTop: '5px' }}>
-              <s-text tone="critical">Please Initialize Metafields first (Step 1).</s-text>
+          {isProductCreated ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <s-button variant="secondary" disabled>
+                Demo Product Created ✅
+              </s-button>
+              <s-text tone="success">
+                Product has been created! Please go to your Shopify Admin - Products to view it.
+              </s-text>
+              <s-text tone="warning">
+                <b>Note:</b> By default, new products might not be published to your Online Store channel. If you see a 404 error, please click the <b>"Preview"</b> button from the Product page in Shopify Admin, or manually publish it to the Online Store channel.
+              </s-text>
             </div>
+          ) : (
+            <>
+              <s-button
+                onClick={() => fetcher.submit({ _action: "create_demo_product" }, { method: "post" })}
+                loading={fetcher.state === "submitting" ? true : undefined}
+                disabled={!isSetupComplete ? true : undefined}
+              >
+                Create Demo Product
+              </s-button>
+              {!isSetupComplete && (
+                <div style={{ marginTop: '5px' }}>
+                  <s-text tone="critical">Please Initialize Metafields first (Step 1).</s-text>
+                </div>
+              )}
+            </>
           )}
         </div>
       </s-section>
