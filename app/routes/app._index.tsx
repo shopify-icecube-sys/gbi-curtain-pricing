@@ -45,6 +45,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const actionType = formData.get("_action");
 
   if (actionType === "create_demo_product") {
+    const linings = ["Standard Ivory", "Blackout", "Thermal Lining"];
+    const styles = ["Eyelet", "Goblet Pleat", "Pinch Pleat", "Wave", "3inch Pencil Pleat", "6inch Pencil Pleat"];
+    
+    const variants = [];
+    for (const l of linings) {
+      for (const s of styles) {
+        variants.push({
+          optionValues: [
+            { optionName: "Lining", name: l },
+            { optionName: "Style", name: s }
+          ],
+          price: "0.00"
+        });
+      }
+    }
+
     const CREATE_PRODUCT_MUTATION = `
       mutation CreateDemoProduct($input: ProductSetInput!) {
         productSet(input: $input) {
@@ -72,7 +88,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           name: "Style",
           values: [{name: "Eyelet"}, {name: "Goblet Pleat"}, {name: "Pinch Pleat"}, {name: "Wave"}, {name: "3inch Pencil Pleat"}, {name: "6inch Pencil Pleat"}]
         }
-      ]
+      ],
+      variants: variants
     };
 
     try {
@@ -207,7 +224,10 @@ export default function Index() {
           shopify.toast.show("Metafields initialized successfully!");
         }
       } else {
-        shopify.toast.show("Something went wrong", { isError: true });
+        const errorMsg = fetcher.data.errors && fetcher.data.errors.length > 0 
+          ? fetcher.data.errors[0].message 
+          : "Something went wrong";
+        shopify.toast.show(errorMsg, { isError: true });
       }
     }
   }, [fetcher.data, fetcher.state, shopify]);
