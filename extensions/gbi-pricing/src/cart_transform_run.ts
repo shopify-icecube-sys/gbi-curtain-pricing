@@ -23,7 +23,7 @@ export function cartTransformRun(input: RunInput): FunctionRunResult {
             price: {
               adjustment: {
                 fixedPricePerUnit: {
-                  amount: calculatedPrice
+                  amount: calculatedPrice.toString()
                 }
               }
             }
