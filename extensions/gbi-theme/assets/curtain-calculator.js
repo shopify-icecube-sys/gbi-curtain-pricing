@@ -122,10 +122,14 @@ function runGbiCalculation() {
       priceDisplay.innerText = formattedPrice;
       priceDisplay.style.opacity = '1';
       
-      // Crucial: Inject hidden property into the product form so it goes to cart
-      injectHiddenPropertyToForm('_calculated_price', finalPrice.toFixed(2));
-      injectHiddenPropertyToForm('Width (cm)', width);
-      injectHiddenPropertyToForm('Drop (cm)', drop);
+      // Update the permanent hidden input (always part of the form via form= attribute)
+      const calcPriceInput = document.getElementById('gbi-calculated-price-input');
+      if (calcPriceInput) {
+        calcPriceInput.value = finalPrice.toFixed(2);
+        console.log('[GBI] _calculated_price set to:', calcPriceInput.value);
+      } else {
+        console.warn('[GBI] Could not find #gbi-calculated-price-input');
+      }
       
     }, 50);
   }

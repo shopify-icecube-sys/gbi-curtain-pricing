@@ -21,6 +21,9 @@
       </div>
     </div>
 
+    {%- comment -%} Always-present hidden field. Value is set by JS after calculation. The form= attribute ensures it's submitted with the product form even when using AJAX. {%- endcomment -%}
+    <input type="hidden" id="gbi-calculated-price-input" form="product-form-{{ section.id }}" name="properties[_calculated_price]" value="0">
+
     <div class="price_option_section border-top" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
       <button type="button" id="gbi-calculate-btn" class="button button--primary" style="background: #000; color: #fff; padding: 12px 20px; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; width: 100%;">
         Calculate Price
