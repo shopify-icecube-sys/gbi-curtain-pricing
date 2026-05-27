@@ -20,10 +20,11 @@ export function cartTransformRun(input: RunInput): FunctionRunResult {
         operations.push({
           update: {
             cartLineId: line.id,
+            title: `GBI Price: £${calculatedPrice.toFixed(2)}`,
             price: {
               adjustment: {
                 fixedPricePerUnit: {
-                  amount: "99.99"
+                  amount: calculatedPrice.toFixed(2)
                 }
               }
             }
