@@ -1,0 +1,21 @@
+api_version = "2026-04"
+
+[[extensions]]
+name = "t:name"
+handle = "gbi-pricing"
+type = "function"
+uid = "22d530c6-9d04-06fe-1caa-56c2075e315c6454e010"
+description = "t:description"
+
+  [[extensions.targeting]]
+  target = "cart.transform.run"
+  input_query = "src/cart_transform_run.graphql"
+  export = "cart-transform-run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
+
+  [extensions.ui.paths]
+  create = "/"
+  details = "/"

@@ -1,0 +1,47 @@
+{% if product.metafields.custom.fabric_cost_per_metre %}
+  <div class="gbi-curtain-calculator bg-light p-23" style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;">
+    
+    {% comment %} Metafields required for calculation {% endcomment %}
+    <input type="hidden" id="gbi-meta-metre-cost" value="{{ product.metafields.custom.fabric_cost_per_metre | default: 0 }}">
+    <input type="hidden" id="gbi-meta-vertical-repeat" value="{{ product.metafields.custom.vertical_pattern_repeat | default: 25 }}">
+    <input type="hidden" id="gbi-meta-roll-width" value="{{ product.metafields.custom.fabric_roll_width | default: 140 }}">
+    <input type="hidden" id="gbi-fixed-postage" value="20.00">
+
+    <div class="singal_row justify-content-between mb-4 pb-4 border-bottom" style="display: flex; gap: 15px; margin-bottom: 15px; align-items: center;">
+      <div class="width_drop_option" style="display: flex; gap: 20px;">
+        <span class="line-item-property__field width_option mb-3"> 
+          <label for="gbi-width" style="display: block; font-weight: bold; margin-bottom: 5px;">Track/Pole Length (cm):</label>
+          <input id="gbi-width" type="number" form="product-form-{{ section.id }}" name="properties[Width (cm)]" class="curtain_product_wd" style="padding: 10px; border: 1px solid #ccc; width: 100px; border-radius: 4px;" required>
+        </span>
+        
+        <span class="line-item-property__field drop_option mb-3"> 
+          <label for="gbi-drop" style="display: block; font-weight: bold; margin-bottom: 5px;">Curtain Drop (cm):</label>
+          <input id="gbi-drop" type="number" form="product-form-{{ section.id }}" name="properties[Drop (cm)]" class="curtain_product_dp" style="padding: 10px; border: 1px solid #ccc; width: 100px; border-radius: 4px;" required>
+        </span>
+      </div>
+    </div>
+
+    <div class="price_option_section border-top" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+      <button type="button" id="gbi-calculate-btn" class="button button--primary" style="background: #000; color: #fff; padding: 12px 20px; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; width: 100%;">
+        Calculate Price
+      </button>
+      
+      <div class="second_option_section" style="margin-top: 15px; text-align: center;">
+        <div class="price price--large">
+          <span id="gbi-display-price" style="font-size: 24px; font-weight: bold; color: #333;">£0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <script src="{{ 'curtain-calculator.js' | asset_url }}" defer></script>
+  </div>
+{% endif %}
+
+{% schema %}
+{
+  "name": "GBI Curtain Calculator",
+  "target": "section",
+  "templates": ["product"],
+  "settings": []
+}
+{% endschema %}
