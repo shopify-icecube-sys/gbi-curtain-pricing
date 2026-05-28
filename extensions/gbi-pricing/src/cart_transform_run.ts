@@ -45,6 +45,13 @@ export function cartTransformRun(input: CartTransformRunInput): CartTransformRun
           {
             merchandiseId: line.merchandise.id,
             quantity: line.quantity,
+            price: {
+              adjustment: {
+                fixedPricePerUnit: {
+                  amount: "0.00",
+                },
+              },
+            },
           },
           {
             merchandiseId: componentVariantId,
@@ -57,7 +64,7 @@ export function cartTransformRun(input: CartTransformRunInput): CartTransformRun
               },
             },
           },
-        ],
+        ]
       },
     });
   }
