@@ -43,19 +43,10 @@ export function cartTransformRun(input: CartTransformRunInput): CartTransformRun
         cartLineId: line.id,
         expandedCartItems: [
           {
-            // Main curtain – retain the product the customer chose, price £0
             merchandiseId: line.merchandise.id,
             quantity: line.quantity,
-            price: {
-              adjustment: {
-                fixedPricePerUnit: {
-                  amount: "0.00",
-                },
-              },
-            },
           },
           {
-            // Invisible pricing component – carries the full calculated price
             merchandiseId: componentVariantId,
             quantity: 1,
             price: {
