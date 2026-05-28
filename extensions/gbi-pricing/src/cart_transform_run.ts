@@ -8,47 +8,58 @@ const NO_CHANGES: CartTransformRunResult = {
   operations: [],
 };
 
-export function cartTransformRun(input: CartTransformRunInput): CartTransformRunResult {
-  // Get the pricing component variant ID from the shop metafield set by admin app
+export function cartTransformRun(
+  input: CartTransformRunInput
+): CartTransformRunResult {
+
   const componentVariantId = input.shop?.metafield?.value;
 
   if (!componentVariantId) {
-    // Admin has not set up the pricing component product yet
     return NO_CHANGES;
   }
 
   const operations: Operation[] = [];
 
   for (const line of input.cart.lines) {
-    if (line.merchandise.__typename !== "ProductVariant") continue;
 
-    // Skip if this line IS the pricing component itself (prevent double-processing)
-    if (line.merchandise.id === componentVariantId) continue;
+    if (line.merchandise.__typename !== "ProductVariant") {
+      continue;
+    }
 
-    // Only process lines that have a calculated price
-    const priceAttr = line.attribute;
-    if (!priceAttr?.value) continue;
+    // Skip addon product itself
+    if (line.merchandise.id === componentVariantId) {
+      continue;
+    }
 
-    const calculatedPriceStr = priceAttr.value.replace(/[^0-9.]/g, "");
-    const calculatedPrice = parseFloat(calculatedPriceStr);
+    // Read property
+    const calculatedPriceAttr = line.attributes?.find(
+      (a) => a.key === "_calculated_price"
+    );
 
-    if (isNaN(calculatedPrice) || calculatedPrice <= 0) continue;
+    if (!calculatedPriceAttr?.value) {
+      continue;
+    }
 
-    // Use lineExpand to split the £0 curtain into:
-    //   1. Main curtain component (£0 – keeps product title/image)
-    //   2. Pricing component (carries the calculated price)
-    // The bundle total shown to the customer = £0 + £calculatedPrice = £calculatedPrice ✅
+    const calculatedPrice = parseFloat(calculatedPriceAttr.value);
+
+    if (isNaN(calculatedPrice) || calculatedPrice <= 0) {
+      continue;
+    }
+
     operations.push({
       lineExpand: {
         cartLineId: line.id,
+
         expandedCartItems: [
           {
             merchandiseId: line.merchandise.id,
             quantity: line.quantity,
           },
+
           {
             merchandiseId: componentVariantId,
             quantity: 1,
+
             price: {
               adjustment: {
                 fixedPricePerUnit: {
@@ -62,5 +73,7 @@ export function cartTransformRun(input: CartTransformRunInput): CartTransformRun
     });
   }
 
-  return operations.length > 0 ? { operations } : NO_CHANGES;
+  return operations.length > 0
+    ? { operations }
+    : NO_CHANGES;
 }
