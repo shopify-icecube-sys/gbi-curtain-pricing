@@ -1,5 +1,5 @@
 import type {
-  RunInput,
+  CartTransformRunInput,
   CartTransformRunResult,
   Operation,
 } from "../generated/api";
@@ -8,7 +8,7 @@ const NO_CHANGES: CartTransformRunResult = {
   operations: [],
 };
 
-export function cartTransformRun(input: RunInput): CartTransformRunResult {
+export function cartTransformRun(input: CartTransformRunInput): CartTransformRunResult {
   // Get the pricing component variant ID from the shop metafield set by admin app
   const componentVariantId = input.shop?.metafield?.value;
 
