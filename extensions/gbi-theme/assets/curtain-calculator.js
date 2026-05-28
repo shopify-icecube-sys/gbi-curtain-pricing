@@ -133,7 +133,7 @@ function runGbiCalculation() {
 }
 
 function injectHiddenPropertyToForm(propertyName, propertyValue) {
-  const form = document.querySelector('form[id^="product-form"]');
+  const form = document.querySelector('product-form form');
 
   console.log('[GBI] FORM FOUND:', form);
 
@@ -142,7 +142,9 @@ function injectHiddenPropertyToForm(propertyName, propertyValue) {
     return;
   }
 
-  let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
+  let existingInput = form.querySelector(
+    `input[name="properties[${propertyName}]"]`
+  );
 
   if (!existingInput) {
     existingInput = document.createElement('input');
@@ -169,7 +171,7 @@ document.addEventListener('DOMContentLoaded', function () {
 document.addEventListener('submit', function (e) {
   const form = e.target;
 
-  if (!form.matches('form[id^="product-form"]')) return;
+  if (!form.closest('product-form')) return;
 
   const existingInput = form.querySelector(
     'input[name="properties[gbi_calculated_price]"]'
