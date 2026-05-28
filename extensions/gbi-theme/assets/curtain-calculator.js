@@ -159,3 +159,21 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 });
+document.addEventListener('submit', function (e) {
+  const form = e.target;
+
+  if (!form.matches('form[id^="product-form"]')) return;
+
+  const existingInput = form.querySelector(
+    'input[name="properties[gbi_calculated_price]"]'
+  );
+
+  if (!existingInput) {
+    console.warn('[GBI] Missing calculated price before submit');
+    e.preventDefault();
+    alert('Please calculate the curtain price first.');
+    return;
+  }
+
+  console.log('[GBI] Cart property submitting:', existingInput.value);
+});
