@@ -133,21 +133,28 @@ function runGbiCalculation() {
 }
 
 function injectHiddenPropertyToForm(propertyName, propertyValue) {
-  const form = document.querySelector('form[action*="/cart/add"]');
+  const form = document.querySelector('form[id^="product-form"]');
+
+  console.log('[GBI] FORM FOUND:', form);
+
   if (!form) {
     console.warn('[GBI] Add to cart form not found.');
     return;
   }
 
   let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
+
   if (!existingInput) {
     existingInput = document.createElement('input');
     existingInput.type = 'hidden';
     existingInput.name = `properties[${propertyName}]`;
+
     form.appendChild(existingInput);
   }
+
   existingInput.value = propertyValue;
-  console.log(`[GBI] Injected ${propertyName} = ${propertyValue} into cart form`);
+
+  console.log(`[GBI] Injected ${propertyName} = ${propertyValue}`);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
