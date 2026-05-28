@@ -19,12 +19,12 @@ const GBI_MASTER_CONFIG = {
 
 function runGbiCalculation() {
   console.log("GBI Engine: Starting Calculation...");
-  
+
   const widthInput = document.getElementById('gbi-width');
   const dropInput = document.getElementById('gbi-drop');
   const width = parseFloat(widthInput?.value) || 0;
   const drop = parseFloat(dropInput?.value) || 0;
-  
+
   if (width <= 0 || drop <= 0) {
     alert("Please enter valid width and drop.");
     return;
@@ -93,7 +93,7 @@ function runGbiCalculation() {
   const style = GBI_MASTER_CONFIG.style[styleName];
   const liningCost = GBI_MASTER_CONFIG.lining[liningName];
 
-  if(!style || liningCost === undefined) {
+  if (!style || liningCost === undefined) {
     console.warn("Mapping missing for selected options:", styleName, liningName);
     return;
   }
@@ -102,7 +102,7 @@ function runGbiCalculation() {
   let rawWidths = totalWidthNeeded / rollWidth;
   let numWidths;
   let decimalPart = rawWidths - Math.floor(rawWidths);
-  
+
   if (decimalPart <= 0.2 && Math.floor(rawWidths) >= 1) {
     numWidths = Math.floor(rawWidths);
   } else {
@@ -115,19 +115,19 @@ function runGbiCalculation() {
   let finalPrice = (totalMeterage * fabricRRP) + (totalMeterage * liningCost) + (numWidths * style.labor) + postage;
 
   const priceDisplay = document.getElementById('gbi-display-price');
-  if(priceDisplay) {
+  if (priceDisplay) {
     priceDisplay.style.opacity = '0.5';
     setTimeout(() => {
-      const formattedPrice = "£" + finalPrice.toFixed(2);
+      const formattedPrice = "₹" + finalPrice.toFixed(2);
       priceDisplay.innerText = formattedPrice;
       priceDisplay.style.opacity = '1';
-      
+
       // Crucial: Inject hidden property into the product form so it goes to cart
       // We must inject directly into the DOM form because AJAX themes often ignore the `form=` attribute.
       injectHiddenPropertyToForm('_calculated_price', finalPrice.toFixed(2));
       injectHiddenPropertyToForm('Width (cm)', width);
       injectHiddenPropertyToForm('Drop (cm)', drop);
-      
+
     }, 50);
   }
 }
@@ -150,10 +150,10 @@ function injectHiddenPropertyToForm(propertyName, propertyValue) {
   console.log(`[GBI] Injected ${propertyName} = ${propertyValue} into cart form`);
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const calcBtn = document.getElementById('gbi-calculate-btn');
-  if(calcBtn) {
-    calcBtn.addEventListener('click', function(e) {
+  if (calcBtn) {
+    calcBtn.addEventListener('click', function (e) {
       e.preventDefault();
       runGbiCalculation();
     });
