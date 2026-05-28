@@ -124,7 +124,7 @@ function runGbiCalculation() {
 
       // Crucial: Inject hidden property into the product form so it goes to cart
       // We must inject directly into the DOM form because AJAX themes often ignore the `form=` attribute.
-      injectHiddenPropertyToForm('gbi_calculated_price', finalPrice.toFixed(2));
+      injectHiddenPropertyToForm('_calculated_price', finalPrice.toFixed(2));
       injectHiddenPropertyToForm('Width (cm)', width);
       injectHiddenPropertyToForm('Drop (cm)', drop);
 
