@@ -132,66 +132,30 @@ function runGbiCalculation() {
   }
 }
 
-// function injectHiddenPropertyToForm(propertyName, propertyValue) {
-//   const form = document.querySelector('form[action*="/cart/add"]');
-//   if (!form) {
-//     console.warn('[GBI] Add to cart form not found.');
-//     return;
-//   }
+function injectHiddenPropertyToForm(propertyName, propertyValue) {
+  const form = document.querySelector('form[action*="/cart/add"]');
+  if (!form) {
+    console.warn('[GBI] Add to cart form not found.');
+    return;
+  }
 
-//   let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
-//   if (!existingInput) {
-//     existingInput = document.createElement('input');
-//     existingInput.type = 'hidden';
-//     existingInput.name = `properties[${propertyName}]`;
-//     form.appendChild(existingInput);
-//   }
-//   existingInput.value = propertyValue;
-//   console.log(`[GBI] Injected ${propertyName} = ${propertyValue} into cart form`);
-// }
+  let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
+  if (!existingInput) {
+    existingInput = document.createElement('input');
+    existingInput.type = 'hidden';
+    existingInput.name = `properties[${propertyName}]`;
+    form.appendChild(existingInput);
+  }
+  existingInput.value = propertyValue;
+  console.log(`[GBI] Injected ${propertyName} = ${propertyValue} into cart form`);
+}
 
 document.addEventListener('DOMContentLoaded', function () {
   const calcBtn = document.getElementById('gbi-calculate-btn');
-
   if (calcBtn) {
     calcBtn.addEventListener('click', function (e) {
       e.preventDefault();
       runGbiCalculation();
-    });
-  }
-
-  const form = document.querySelector('form[action*="/cart/add"]');
-
-  if (form) {
-    form.addEventListener('submit', async function (e) {
-      e.preventDefault();
-
-      const displayedPrice =
-        document.getElementById('gbi-display-price')?.innerText || '';
-
-      const calculatedPrice = displayedPrice.replace(/[^0-9.]/g, '');
-
-      const formData = new FormData(form);
-
-      const properties = {
-        "_calculated_price": calculatedPrice
-      };
-
-      const items = [{
-        id: formData.get('id'),
-        quantity: 1,
-        properties
-      }];
-
-      await fetch('/cart/add.js', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ items })
-      });
-
-      window.location.href = '/cart';
     });
   }
 });

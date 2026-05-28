@@ -3,12 +3,9 @@ query CartTransformRunInput {
     lines {
       id
       quantity
-
-      attributes {
-        key
+      attribute(key: "_calculated_price") {
         value
       }
-
       merchandise {
         __typename
         ... on ProductVariant {
@@ -17,12 +14,8 @@ query CartTransformRunInput {
       }
     }
   }
-
   shop {
-    metafield(
-      namespace: "gbi_curtain_pricing",
-      key: "component_variant_id"
-    ) {
+    metafield(namespace: "gbi_curtain_pricing", key: "component_variant_id") {
       value
     }
   }
