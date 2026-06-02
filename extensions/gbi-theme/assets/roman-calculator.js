@@ -105,26 +105,25 @@ function runRomanCalculation() {
 }
 
 function injectRomanHiddenPropertyToForm(propertyName, propertyValue) {
-  const forms = document.querySelectorAll('form[action*="/cart/add"]');
+  // First try finding inside <product-form>, fallback to action attribute
+  const form = document.querySelector('product-form form') || document.querySelector('form[action*="/cart/add"]');
 
-  if (forms.length === 0) {
-    console.warn('[GBI Roman] No add to cart forms found.');
+  if (!form) {
+    console.warn('[GBI Roman] Add to cart form not found.');
     return;
   }
 
-  forms.forEach(form => {
-    let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
+  let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
 
-    if (!existingInput) {
-      existingInput = document.createElement('input');
-      existingInput.type = 'hidden';
-      existingInput.name = `properties[${propertyName}]`;
-      form.appendChild(existingInput);
-    }
+  if (!existingInput) {
+    existingInput = document.createElement('input');
+    existingInput.type = 'hidden';
+    existingInput.name = `properties[${propertyName}]`;
+    form.appendChild(existingInput);
+  }
 
-    existingInput.value = propertyValue;
-    console.log(`[GBI Roman] Injected ${propertyName} = ${propertyValue} into form`);
-  });
+  existingInput.value = propertyValue;
+  console.log(`[GBI Roman] Injected ${propertyName} = ${propertyValue} into form`);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -140,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function () {
 document.addEventListener('submit', function (e) {
   const form = e.target;
 
-  if (!form.action || !form.action.includes('/cart/add')) return;
+  if (!form.closest('product-form') && (!form.action || !form.action.includes('/cart/add'))) return;
 
   const calculatorExists = document.getElementById('gbi-roman-calculate-btn');
   if (!calculatorExists) return;
@@ -150,6 +149,7 @@ document.addEventListener('submit', function (e) {
   if (!existingInput || !existingInput.value) {
     console.warn('[GBI Roman] Missing calculated price before submit');
     e.preventDefault();
+    e.stopImmediatePropagation(); // Stop theme's AJAX script from firing
     alert('Please calculate the Roman Blind price first before adding to cart.');
     return;
   }
