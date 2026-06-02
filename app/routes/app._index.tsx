@@ -34,8 +34,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }
       shop {
+        myshopifyDomain
         metafield(namespace: "gbi_curtain_pricing", key: "component_variant_id") {
           value
+        }
+      }
+      themes: themes(first: 5, roles: [MAIN]) {
+        nodes {
+          id
+          name
+          role
         }
       }
     }
@@ -61,6 +69,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Component is truly ready only when BOTH the value exists AND the definition exists
     const pricingComponentExists = !!componentVariantId && componentMetaDefExists;
 
+    // Build theme editor deep link
+    const shopDomain = data.data?.shop?.myshopifyDomain || "";
+    const mainTheme = data.data?.themes?.nodes?.[0];
+    // Extract numeric theme ID from GID (e.g. "gid://shopify/Theme/123" → "123")
+    const themeId = mainTheme?.id?.split("/").pop() || "current";
+    // Deep-link URL: opens theme editor at product template, prompts to add the app block
+    const EXTENSION_UUID = "2b7b26b4-898e-b926-7989-1fabeee0b0025804e602";
+    const themeEditorUrl = `https://${shopDomain}/admin/themes/${themeId}/editor?template=product&addAppBlock=${EXTENSION_UUID}/curtain_calculator`;
+
     return {
       metafieldsExist: allExist,
       cartTransformActive,
@@ -68,6 +85,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       pricingComponentExists,
       componentVariantId,
       componentMetaDefExists,
+      themeEditorUrl,
+      shopDomain,
     };
   } catch (error) {
     return {
@@ -77,6 +96,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       pricingComponentExists: false,
       componentVariantId: null,
       componentMetaDefExists: false,
+      themeEditorUrl: "",
+      shopDomain: "",
     };
   }
 };
@@ -422,6 +443,7 @@ export default function Index() {
     pricingComponentExists,
     componentVariantId,
     componentMetaDefExists,
+    themeEditorUrl,
   } = useLoaderData<typeof loader>();
 
   const isSetupComplete = metafieldsExist || (metafieldFetcher.data?.type === "metafields_created" && metafieldFetcher.data?.success);
@@ -596,6 +618,49 @@ export default function Index() {
               Activate Pricing Backend
             </s-button>
           )}
+        </div>
+      </s-section>
+      {/* ── Step 5: Add Calculator Block to Theme ── */}
+      <s-section heading="5. Add Calculator Block to Product Page (Required for Reviewers)">
+        <s-paragraph>
+          The GBI Curtain Calculator is a Theme App Extension block. It must be added to the
+          product page template in the Theme Editor before it will appear on any product.
+          Click the button below to open the Theme Editor — the block will be pre-selected
+          and ready to drop in.
+        </s-paragraph>
+
+        <div style={{ marginTop: '16px', marginBottom: '8px', background: '#f4f6f8', borderRadius: '8px', padding: '16px' }}>
+          <s-text tone="neutral">
+            <b>Steps once the Theme Editor opens:</b>
+          </s-text>
+          <ol style={{ marginTop: '8px', marginLeft: '20px', lineHeight: '1.8' }}>
+            <li>In the left sidebar, click <b>"Product information"</b> section to expand it.</li>
+            <li>Click <b>"Add block"</b> (the blue + button inside the section).</li>
+            <li>Under <b>"Apps"</b>, select <b>"GBI Curtain Calculator"</b>.</li>
+            <li>Drag it to sit between <b>Variant picker</b> and <b>Quantity selector</b>.</li>
+            <li>Click <b>Save</b> in the top-right corner.</li>
+          </ol>
+        </div>
+
+        <div style={{ marginTop: '15px' }}>
+          <s-button
+            variant="primary"
+            onClick={() => {
+              if (themeEditorUrl) {
+                window.open(themeEditorUrl, '_blank');
+              }
+            }}
+            disabled={!themeEditorUrl ? true : undefined}
+          >
+            🎨 Open Theme Editor → Add Calculator Block
+          </s-button>
+        </div>
+
+        <div style={{ marginTop: '12px' }}>
+          <s-text tone="neutral">
+            ℹ️ Repeat this step for <b>every curtain product</b> where you want the calculator to appear.
+            The block reads metafields (Fabric Cost, Roll Width, Pattern Repeat) set per product.
+          </s-text>
         </div>
       </s-section>
 
