@@ -78,6 +78,40 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const EXTENSION_UUID = "2b7b26b4-898e-b926-7989-1fabeee0b0025804e602";
     const themeEditorUrl = `https://${shopDomain}/admin/themes/${themeId}/editor?template=product&addAppBlock=${EXTENSION_UUID}/curtain_calculator`;
 
+    // Check if GBI Curtain Calculator block is already in the product template
+    let calculatorBlockAdded = false;
+    if (mainTheme?.id) {
+      try {
+        const themeFileRes = await admin.graphql(`
+          query GetProductTemplate($id: ID!) {
+            theme(id: $id) {
+              files(filenames: ["templates/product.json", "templates/product.liquid"]) {
+                nodes {
+                  filename
+                  body {
+                    ... on OnlineStoreThemeFileBodyText {
+                      content
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `, { variables: { id: mainTheme.id } });
+        const themeFileData = await themeFileRes.json() as any;
+        const files = themeFileData.data?.theme?.files?.nodes || [];
+        for (const file of files) {
+          const content = file?.body?.content || "";
+          if (content.includes(EXTENSION_UUID)) {
+            calculatorBlockAdded = true;
+            break;
+          }
+        }
+      } catch (themeErr) {
+        console.error("Could not read theme file:", themeErr);
+      }
+    }
+
     return {
       metafieldsExist: allExist,
       cartTransformActive,
@@ -87,6 +121,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       componentMetaDefExists,
       themeEditorUrl,
       shopDomain,
+      calculatorBlockAdded,
     };
   } catch (error) {
     console.error("Loader Error:", error);
@@ -99,6 +134,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       componentMetaDefExists: false,
       themeEditorUrl: "",
       shopDomain: "",
+      calculatorBlockAdded: false,
     };
   }
 };
@@ -445,6 +481,7 @@ export default function Index() {
     componentVariantId,
     componentMetaDefExists,
     themeEditorUrl,
+    calculatorBlockAdded,
   } = useLoaderData<typeof loader>();
 
   const isSetupComplete = metafieldsExist || (metafieldFetcher.data?.type === "metafields_created" && metafieldFetcher.data?.success);
@@ -644,17 +681,32 @@ export default function Index() {
         </div>
 
         <div style={{ marginTop: '15px' }}>
-          <s-button
-            variant="primary"
-            onClick={() => {
-              if (themeEditorUrl) {
-                window.open(themeEditorUrl, '_blank');
-              }
-            }}
-            disabled={!themeEditorUrl ? true : undefined}
-          >
-            🎨 Open Theme Editor → Add Calculator Block
-          </s-button>
+          {calculatorBlockAdded ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <s-button variant="secondary" disabled>Calculator Block Added ✅</s-button>
+              <s-text tone="success">
+                The GBI Curtain Calculator block is active on the product page template.
+              </s-text>
+              <s-button
+                variant="secondary"
+                onClick={() => { if (themeEditorUrl) window.open(themeEditorUrl, '_blank'); }}
+              >
+                🎨 Re-open Theme Editor
+              </s-button>
+            </div>
+          ) : (
+            <s-button
+              variant="primary"
+              onClick={() => {
+                if (themeEditorUrl) {
+                  window.open(themeEditorUrl, '_blank');
+                }
+              }}
+              disabled={!themeEditorUrl ? true : undefined}
+            >
+              🎨 Open Theme Editor → Add Calculator Block
+            </s-button>
+          )}
         </div>
 
         <div style={{ marginTop: '12px' }}>
@@ -664,6 +716,7 @@ export default function Index() {
           </s-text>
         </div>
       </s-section>
+
 
     </s-page>
   );
