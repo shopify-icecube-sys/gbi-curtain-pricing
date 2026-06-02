@@ -3,7 +3,7 @@ query CartTransformRunInput {
     lines {
       id
       quantity
-      attribute(key: "gbi_calculated_price") {
+      attribute(key: "_calculated_price") {
         value
       }
       merchandise {
