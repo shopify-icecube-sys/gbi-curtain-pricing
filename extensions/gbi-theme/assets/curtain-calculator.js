@@ -8,12 +8,12 @@ const GBI_MASTER_CONFIG = {
     "Thermal Blackout": 14.00
   },
   style: {
-    "Eyelet": { fullness: 1.5, hem: 25, labor: 25.00 },
-    "Pinch Pleat": { fullness: 2.5, hem: 20, labor: 30.00 },
+    "Eyelet": { fullness: 1.5, hem: 20, labor: 25.00 },
+    "Pinch Pleat": { fullness: 2.5, hem: 20, labor: 25.00 },
     "Wave": { fullness: 2.0, hem: 20, labor: 25.00 },
     "3inch Pencil Pleat": { fullness: 2.0, hem: 20, labor: 25.00 },
     "6inch Pencil Pleat": { fullness: 2.0, hem: 20, labor: 25.00 },
-    "Goblet Pleat": { fullness: 2.5, hem: 20, labor: 30.00 }
+    "Goblet Pleat": { fullness: 2.5, hem: 20, labor: 25.00 }
   }
 };
 
