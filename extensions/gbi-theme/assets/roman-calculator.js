@@ -144,7 +144,7 @@ document.addEventListener('submit', function (e) {
   const calculatorExists = document.getElementById('gbi-roman-calculate-btn');
   if (!calculatorExists) return;
 
-  const existingInput = form.querySelector('input[name="properties[_calculated_price]"]');
+  const existingInput = form.querySelector('input[name="properties[gbi_calculated_price]"]');
 
   if (!existingInput || !existingInput.value) {
     console.warn('[GBI Roman] Missing calculated price before submit');
