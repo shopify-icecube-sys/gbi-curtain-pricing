@@ -89,6 +89,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shopDomain,
     };
   } catch (error) {
+    console.error("Loader Error:", error);
     return {
       metafieldsExist: false,
       cartTransformActive: false,
