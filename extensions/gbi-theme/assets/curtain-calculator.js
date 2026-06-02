@@ -118,13 +118,12 @@ function runGbiCalculation() {
   if (priceDisplay) {
     priceDisplay.style.opacity = '0.5';
     setTimeout(() => {
-      const formattedPrice = "₹" + finalPrice.toFixed(2);
+      const formattedPrice = "£" + finalPrice.toFixed(2);
       priceDisplay.innerText = formattedPrice;
       priceDisplay.style.opacity = '1';
 
-      // Crucial: Inject hidden property into the product form so it goes to cart
-      // We must inject directly into the DOM form because AJAX themes often ignore the `form=` attribute.
-      injectHiddenPropertyToForm('gbi_calculated_price', finalPrice.toFixed(2));
+      // ⚠️ VERY IMPORTANT: MUST BE _calculated_price FOR THE BACKEND FUNCTION TO WORK
+      injectHiddenPropertyToForm('_calculated_price', finalPrice.toFixed(2));
       injectHiddenPropertyToForm('Width (cm)', width);
       injectHiddenPropertyToForm('Drop (cm)', drop);
 
@@ -133,30 +132,27 @@ function runGbiCalculation() {
 }
 
 function injectHiddenPropertyToForm(propertyName, propertyValue) {
-  const form = document.querySelector('product-form form');
+  // Find all possible add-to-cart forms on the page
+  const forms = document.querySelectorAll('form[action*="/cart/add"]');
 
-  console.log('[GBI] FORM FOUND:', form);
-
-  if (!form) {
-    console.warn('[GBI] Add to cart form not found.');
+  if (forms.length === 0) {
+    console.warn('[GBI] No add to cart forms found.');
     return;
   }
 
-  let existingInput = form.querySelector(
-    `input[name="properties[${propertyName}]"]`
-  );
+  forms.forEach(form => {
+    let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
 
-  if (!existingInput) {
-    existingInput = document.createElement('input');
-    existingInput.type = 'hidden';
-    existingInput.name = `properties[${propertyName}]`;
+    if (!existingInput) {
+      existingInput = document.createElement('input');
+      existingInput.type = 'hidden';
+      existingInput.name = `properties[${propertyName}]`;
+      form.appendChild(existingInput);
+    }
 
-    form.appendChild(existingInput);
-  }
-
-  existingInput.value = propertyValue;
-
-  console.log(`[GBI] Injected ${propertyName} = ${propertyValue}`);
+    existingInput.value = propertyValue;
+    console.log(`[GBI] Injected ${propertyName} = ${propertyValue} into form`, form);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -171,16 +167,22 @@ document.addEventListener('DOMContentLoaded', function () {
 document.addEventListener('submit', function (e) {
   const form = e.target;
 
-  if (!form.closest('product-form')) return;
+  // Only intercept add-to-cart forms
+  if (!form.action || !form.action.includes('/cart/add')) return;
 
-  const existingInput = form.querySelector(
-    'input[name="properties[gbi_calculated_price]"]'
-  );
+  // Check if this is a curtain product by looking for our calculator block
+  const calculatorExists = document.getElementById('gbi-calculate-btn');
+  if (!calculatorExists) {
+    // Not a curtain product, let it submit normally!
+    return;
+  }
 
-  if (!existingInput) {
+  const existingInput = form.querySelector('input[name="properties[_calculated_price]"]');
+
+  if (!existingInput || !existingInput.value) {
     console.warn('[GBI] Missing calculated price before submit');
     e.preventDefault();
-    alert('Please calculate the curtain price first.');
+    alert('Please calculate the curtain price first before adding to cart.');
     return;
   }
 
