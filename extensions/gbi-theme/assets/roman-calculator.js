@@ -1,13 +1,47 @@
 const ROMAN_CONFIG = {
   lining: {
     "Bonded": 11.00,
-    "Blackout Bonded": 11.00, // Placeholder as requested
-    "Thermal Lining": 11.00   // Placeholder as requested
+    "Blackout Bonded": 11.00, 
+    "Thermal Lining": 11.00,   
+    "Standard Ivory": 5.00,
+    "Blackout": 7.00,
+    "Unlined": 0.00
   },
-  labourPerWidth: 25.00,
-  cassetteFixed: 25.00,
   postage: 20.00
 };
+
+const ROMAN_MAKEUP_GRID = {
+  widths: [65, 110, 140, 170, 200, 230, 250],
+  drops: [
+    { maxDrop: 95, prices: [180, 204, 228, 252, 276, 300, 324] },
+    { maxDrop: 125, prices: [192, 216, 240, 264, 288, 312, 336] },
+    { maxDrop: 155, prices: [204, 228, 252, 276, 300, 324, 348] },
+    { maxDrop: 170, prices: [216, 240, 264, 288, 312, 336, 360] },
+    { maxDrop: 200, prices: [228, 252, 276, 300, 324, 348, 372] },
+    { maxDrop: 230, prices: [240, 264, 288, 312, 336, 360, 384] },
+    { maxDrop: 250, prices: [252, 276, 300, 324, 348, 372, 396] }
+  ]
+};
+
+function getRomanMakeupCost(width, drop) {
+  let widthIndex = ROMAN_MAKEUP_GRID.widths.length - 1;
+  for (let i = 0; i < ROMAN_MAKEUP_GRID.widths.length; i++) {
+    if (width <= ROMAN_MAKEUP_GRID.widths[i]) {
+      widthIndex = i;
+      break;
+    }
+  }
+
+  let dropRow = ROMAN_MAKEUP_GRID.drops[ROMAN_MAKEUP_GRID.drops.length - 1];
+  for (let i = 0; i < ROMAN_MAKEUP_GRID.drops.length; i++) {
+    if (drop <= ROMAN_MAKEUP_GRID.drops[i].maxDrop) {
+      dropRow = ROMAN_MAKEUP_GRID.drops[i];
+      break;
+    }
+  }
+
+  return dropRow.prices[widthIndex];
+}
 
 function runRomanCalculation() {
   console.log("GBI Roman Engine: Starting Calculation...");
@@ -82,10 +116,11 @@ function runRomanCalculation() {
   // Calculate costs
   let totalFabricCost = fabricMetres * fabricRRP;
   let totalLiningCost = fabricMetres * liningCost;
-  let totalLabourCost = numWidths * ROMAN_CONFIG.labourPerWidth;
-  let totalCassetteCost = ROMAN_CONFIG.cassetteFixed;
-
-  let finalPrice = totalFabricCost + totalLiningCost + totalLabourCost + totalCassetteCost + ROMAN_CONFIG.postage;
+  
+  // Use new Matrix for Make up and Headrail
+  let totalMakeupAndHeadrail = getRomanMakeupCost(width, drop);
+  
+  let finalPrice = totalFabricCost + totalLiningCost + totalMakeupAndHeadrail + ROMAN_CONFIG.postage;
 
   const priceDisplay = document.getElementById('gbi-roman-display-price');
   if (priceDisplay) {

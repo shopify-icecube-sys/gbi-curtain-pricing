@@ -1,20 +1,23 @@
 const GBI_MASTER_CONFIG = {
   lining: {
     "Standard Ivory": 5.00,
+    "Ivory Sateen": 5.00,
     "Poly Cotton": 5.00,
     "Satin Lined": 10.00,
-    "Blackout": 8.00,
-    "Thermal Lining": 10.00,
-    "Thermal Blackout": 14.00
+    "Blackout": 7.00,
+    "Thermal Lining": 9.00,
+    "Thermal Blackout": 14.00,
+    "Unlined": 0.00
   },
   style: {
-    "Eyelet": { fullness: 1.5, hem: 20, labor: 25.00 },
-    "Pinch Pleat": { fullness: 2.5, hem: 20, labor: 25.00 },
-    "Wave": { fullness: 2.0, hem: 20, labor: 25.00 },
-    "3inch Pencil Pleat": { fullness: 2.0, hem: 20, labor: 25.00 },
-    "6inch Pencil Pleat": { fullness: 2.0, hem: 20, labor: 25.00 },
-    "Goblet Pleat": { fullness: 2.5, hem: 20, labor: 25.00 }
-  }
+    "Eyelet": { fullness: 1.7, labor: 73.00 },
+    "Pinch Pleat": { fullness: 2.5, labor: 73.00 },
+    "Wave": { fullness: 2.2, labor: 55.00 },
+    "3inch Pencil Pleat": { fullness: 2.0, labor: 50.00 },
+    "6inch Pencil Pleat": { fullness: 2.0, labor: 50.00 },
+    "Goblet Pleat": { fullness: 2.5, labor: 73.00 }
+  },
+  hemAllowance: 30
 };
 
 function runGbiCalculation() {
@@ -100,18 +103,16 @@ function runGbiCalculation() {
 
   let totalWidthNeeded = width * style.fullness;
   let rawWidths = totalWidthNeeded / rollWidth;
-  let numWidths;
-  let decimalPart = rawWidths - Math.floor(rawWidths);
+  // Step 1: Strictly round up to the next whole width
+  let numWidths = Math.ceil(rawWidths);
 
-  if (decimalPart <= 0.2 && Math.floor(rawWidths) >= 1) {
-    numWidths = Math.floor(rawWidths);
-  } else {
-    numWidths = Math.ceil(rawWidths);
-  }
+  // Step 2: Calculate cut length per width (rounded up to 1 decimal place)
+  let cutLength = Math.ceil(((drop + GBI_MASTER_CONFIG.hemAllowance + verticalRepeat) / 100) * 10) / 10;
+  
+  // Step 3: Total Meterage (rounded up to 1 decimal place)
+  let totalMeterage = Math.ceil((cutLength * numWidths) * 10) / 10;
 
-  let dropInMeters = (drop + style.hem + verticalRepeat) / 100;
-  let totalMeterage = Math.ceil((dropInMeters * numWidths) * 10) / 10;
-
+  // Step 4: Final Costing
   let finalPrice = (totalMeterage * fabricRRP) + (totalMeterage * liningCost) + (numWidths * style.labor) + postage;
 
   const priceDisplay = document.getElementById('gbi-display-price');
