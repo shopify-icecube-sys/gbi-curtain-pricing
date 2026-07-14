@@ -99,15 +99,15 @@ function runRomanCalculation() {
   }
 
   // Roman Blind Fabric Logic
-  // if width < 120cm: Drop + 20cm
-  // if width >= 120cm: Drop + 20cm + (repeat * 2)
+  // if width <= 120cm: 1 width of fabric = Drop + 20cm hem
+  // if width > 120cm: 2 widths of fabric = (Drop + 20cm hem + repeat) x 2
   let fabricRequiredCm = 0;
-  let numWidths = Math.ceil(width / 140); // Standard roll width assumption for labour
+  let numWidths = width <= 120 ? 1 : 2;
 
-  if (width < 120) {
+  if (width <= 120) {
     fabricRequiredCm = drop + 20;
   } else {
-    fabricRequiredCm = drop + 20 + (verticalRepeat * 2);
+    fabricRequiredCm = (drop + 20 + verticalRepeat) * 2;
   }
 
   // Convert to metres and round up to 1 decimal
