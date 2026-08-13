@@ -1,8 +1,8 @@
 const ROMAN_CONFIG = {
   lining: {
     "Bonded": 11.00,
-    "Blackout Bonded": 11.00, 
-    "Thermal Lining": 11.00,   
+    "Blackout Bonded": 11.00,
+    "Thermal Lining": 11.00,
     "Standard Ivory": 5.00,
     "Blackout": 7.00,
     "Unlined": 0.00
@@ -99,15 +99,15 @@ function runRomanCalculation() {
   }
 
   // Roman Blind Fabric Logic
-  // if width <= 120cm: 1 width of fabric = Drop + 20cm hem
-  // if width > 120cm: 2 widths of fabric = (Drop + 20cm hem + repeat) x 2
+  // Cutoff is now 123cm according to client.
   let fabricRequiredCm = 0;
-  let numWidths = width <= 120 ? 1 : 2;
-
-  if (width <= 120) {
+  
+  if (width <= 123) {
+    // 1 width is ok
     fabricRequiredCm = drop + 20;
   } else {
-    fabricRequiredCm = (drop + 20 + verticalRepeat) * 2;
+    // 2 widths of fabric pattern matched: (drop + 20) * 2 + vertical repeat
+    fabricRequiredCm = ((drop + 20) * 2) + verticalRepeat;
   }
 
   // Convert to metres and round up to 1 decimal
@@ -116,10 +116,10 @@ function runRomanCalculation() {
   // Calculate costs
   let totalFabricCost = fabricMetres * fabricRRP;
   let totalLiningCost = fabricMetres * liningCost;
-  
+
   // Use new Matrix for Make up and Headrail
   let totalMakeupAndHeadrail = getRomanMakeupCost(width, drop);
-  
+
   let finalPrice = totalFabricCost + totalLiningCost + totalMakeupAndHeadrail + ROMAN_CONFIG.postage;
 
   const priceDisplay = document.getElementById('gbi-roman-display-price');
