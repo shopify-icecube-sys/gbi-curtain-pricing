@@ -1,0 +1,18 @@
+{%- comment -%}
+  Shared data for the GBI curtain calculator.
+  Exposes the product's variant -> option-value map so the JS can read the
+  currently selected Lining / Style reliably, instead of scraping the theme DOM.
+{%- endcomment -%}
+
+<script type="application/json" id="gbi-variant-data">
+  {
+    "optionNames": {{ product.options | json }},
+    "variants": {
+      {%- for v in product.variants -%}
+        "{{ v.id }}": {{ v.options | json }}{%- unless forloop.last -%},{%- endunless -%}
+      {%- endfor -%}
+    },
+    "currency": {{ cart.currency.iso_code | default: shop.currency | json }},
+    "locale": {{ request.locale.iso_code | default: 'en-GB' | json }}
+  }
+</script>
