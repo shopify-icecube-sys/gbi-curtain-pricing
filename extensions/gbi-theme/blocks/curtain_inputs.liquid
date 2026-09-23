@@ -22,6 +22,11 @@
     <input type="hidden" id="gbi-meta-roll-width" value="{{ product.metafields.custom.fabric_roll_width | default: 140 }}">
     <input type="hidden" id="gbi-fixed-postage" value="{{ block.settings.postage | default: 20.00 }}">
 
+    {% comment %} Matching-cushion add-on rates (same formula as the standalone cushion calculator) {% endcomment %}
+    <input type="hidden" id="gbi-cushion-multiplier" value="{{ block.settings.cushion_multiplier | default: 0.6 }}">
+    <input type="hidden" id="gbi-cushion-labour" value="{{ block.settings.cushion_labour | default: 25.00 }}">
+    <input type="hidden" id="gbi-cushion-postage" value="{{ block.settings.cushion_postage | default: 10.00 }}">
+
     {% render 'gbi-curtain-data' %}
 
     <div style="display: flex; gap: 15px; align-items: center;">
@@ -50,6 +55,30 @@
       "id": "postage",
       "label": "Delivery / postage charge",
       "default": 20
+    },
+    {
+      "type": "header",
+      "content": "Matching cushion add-on"
+    },
+    {
+      "type": "text",
+      "id": "cushion_multiplier",
+      "label": "Cushion fabric multiplier",
+      "default": "0.6",
+      "info": "Fabric cost per metre x this value."
+    },
+    {
+      "type": "number",
+      "id": "cushion_labour",
+      "label": "Cushion labour cost",
+      "default": 25
+    },
+    {
+      "type": "number",
+      "id": "cushion_postage",
+      "label": "Cushion postage",
+      "default": 10,
+      "info": "Set to 0 if the curtain delivery charge already covers the cushion."
     }
   ]
 }

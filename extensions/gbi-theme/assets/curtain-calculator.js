@@ -115,6 +115,25 @@ function gbiFormatMoney(amount) {
   }
 }
 
+// Matching-cushion add-on. Mirrors the standalone cushion calculator:
+// fabric cost per metre x multiplier + labour + postage.
+function gbiNumberFrom(id, fallback) {
+  const el = document.getElementById(id);
+  const value = parseFloat(el && el.value);
+  return isNaN(value) ? fallback : value;
+}
+
+function gbiCushionSelected() {
+  const checked = document.querySelector('input[name="properties[Cushion]"]:checked');
+  return !!checked && gbiNormalise(checked.value) === 'yes';
+}
+
+function gbiCushionPrice(fabricRRP) {
+  return (fabricRRP * gbiNumberFrom('gbi-cushion-multiplier', 0.6))
+    + gbiNumberFrom('gbi-cushion-labour', 25.00)
+    + gbiNumberFrom('gbi-cushion-postage', 10.00);
+}
+
 let gbiHasCalculated = false;
 let gbiLastVariantId = null;
 
@@ -171,7 +190,10 @@ function runGbiCalculation(options) {
   const fabricTotal = totalMeterage * fabricRRP;
   const liningTotal = totalMeterage * liningCost;
   const laborTotal = numWidths * style.labor;
-  const finalPrice = fabricTotal + liningTotal + laborTotal + postage;
+  const curtainPrice = fabricTotal + liningTotal + laborTotal + postage;
+
+  const cushionTotal = gbiCushionSelected() ? gbiCushionPrice(fabricRRP) : 0;
+  const finalPrice = curtainPrice + cushionTotal;
 
   console.log('[GBI] Breakdown', {
     style: styleName,
@@ -183,6 +205,8 @@ function runGbiCalculation(options) {
     liningTotal: liningTotal,
     laborTotal: laborTotal,
     postage: postage,
+    curtainPrice: curtainPrice,
+    cushionTotal: cushionTotal,
     finalPrice: finalPrice
   });
 
@@ -198,13 +222,27 @@ function runGbiCalculation(options) {
       liningName + ' lining @ ' + gbiFormatMoney(liningCost) + '/m',
       numWidths + ' width(s) ' + styleName + ' making @ ' + gbiFormatMoney(style.labor),
       'Delivery ' + gbiFormatMoney(postage)
-    ].join('<br>');
+    ].concat(
+      cushionTotal > 0 ? ['Matching cushion ' + gbiFormatMoney(cushionTotal)] : []
+    ).join('<br>');
   }
 
   gbiHasCalculated = true;
   gbiInjectProperty('gbi_calculated_price', finalPrice.toFixed(2));
   gbiInjectProperty('Width (cm)', width);
   gbiInjectProperty('Drop (cm)', drop);
+
+  if (cushionTotal > 0) {
+    gbiInjectProperty('Cushion Price', gbiFormatMoney(cushionTotal));
+  } else {
+    gbiRemoveProperty('Cushion Price');
+  }
+}
+
+function gbiRemoveProperty(propertyName) {
+  const form = gbiProductForm();
+  const input = form && form.querySelector('input[name="properties[' + propertyName + ']"]');
+  if (input) input.remove();
 }
 
 function resetGbiPrice() {
@@ -220,6 +258,7 @@ function resetGbiPrice() {
   if (!form) return;
   const stale = form.querySelector('input[name="properties[gbi_calculated_price]"]');
   if (stale) stale.remove();
+  gbiRemoveProperty('Cushion Price');
 }
 
 function gbiInjectProperty(propertyName, propertyValue) {
@@ -266,6 +305,12 @@ document.addEventListener('click', function (e) {
   if (!btn) return;
   e.preventDefault();
   runGbiCalculation();
+});
+
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.name === 'properties[Cushion]') {
+    if (gbiHasCalculated) runGbiCalculation({ silent: true });
+  }
 });
 
 document.addEventListener('input', function (e) {
