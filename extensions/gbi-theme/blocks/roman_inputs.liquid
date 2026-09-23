@@ -1,0 +1,55 @@
+{%- liquid
+  assign gbi_fabric_cost = product.metafields.custom.fabric_cost_per_metre.value
+  if gbi_fabric_cost == blank
+    for field in product.metafields.custom
+      assign gbi_key = field[0]
+      if gbi_key contains 'fabric_cost' and field[1].value != blank
+        assign gbi_fabric_cost = field[1].value
+        break
+      endif
+    endfor
+  endif
+-%}
+
+{% if gbi_fabric_cost != blank %}
+  <div
+    class="gbi-roman-inputs bg-light p-23"
+    style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;"
+  >
+    {% comment %} Metafields required for calculation {% endcomment %}
+    <input type="hidden" id="gbi-roman-meta-metre-cost" value="{{ gbi_fabric_cost }}">
+    <input type="hidden" id="gbi-roman-meta-vertical-repeat" value="{{ product.metafields.custom.vertical_pattern_repeat | default: 0 }}">
+    <input type="hidden" id="gbi-roman-fixed-postage" value="{{ block.settings.postage | default: 20.00 }}">
+
+    {% render 'gbi-variant-data' %}
+
+    <div style="display: flex; gap: 15px; align-items: center;">
+      <div class="width_drop_option" style="display: flex; gap: 20px;">
+        <span class="line-item-property__field width_option mb-3">
+          <label for="gbi-roman-width" style="display: block; font-weight: bold; margin-bottom: 5px;">Blind Width (cm):</label>
+          <input id="gbi-roman-width" type="number" form="product-form-{{ section.id }}" name="properties[Width (cm)]" class="curtain_product_wd" style="padding: 10px; border: 1px solid #ccc; width: 100px; border-radius: 4px;" required>
+        </span>
+        <span class="line-item-property__field drop_option mb-3">
+          <label for="gbi-roman-drop" style="display: block; font-weight: bold; margin-bottom: 5px;">Blind Drop (cm):</label>
+          <input id="gbi-roman-drop" type="number" form="product-form-{{ section.id }}" name="properties[Drop (cm)]" class="curtain_product_dp" style="padding: 10px; border: 1px solid #ccc; width: 100px; border-radius: 4px;" required>
+        </span>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+{% schema %}
+{
+  "name": "GBI Roman Inputs",
+  "target": "section",
+  "templates": ["product"],
+  "settings": [
+    {
+      "type": "number",
+      "id": "postage",
+      "label": "Delivery / postage charge",
+      "default": 20
+    }
+  ]
+}
+{% endschema %}

@@ -1,4 +1,17 @@
-{% if product.metafields.custom.fabric_cost_per_metre %}
+{%- liquid
+  assign gbi_fabric_cost = product.metafields.custom.fabric_cost_per_metre.value
+  if gbi_fabric_cost == blank
+    for field in product.metafields.custom
+      assign gbi_key = field[0]
+      if gbi_key contains 'fabric_cost' and field[1].value != blank
+        assign gbi_fabric_cost = field[1].value
+        break
+      endif
+    endfor
+  endif
+-%}
+
+{% if gbi_fabric_cost != blank %}
   <div
     class="gbi-roman-calculator bg-light p-23"
     style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;"
@@ -7,7 +20,7 @@
     <input
       type="hidden"
       id="gbi-roman-meta-metre-cost"
-      value="{{ product.metafields.custom.fabric_cost_per_metre | default: 0 }}"
+      value="{{ gbi_fabric_cost }}"
     >
     <input
       type="hidden"
@@ -15,6 +28,8 @@
       value="{{ product.metafields.custom.vertical_pattern_repeat | default: 0 }}"
     >
     <input type="hidden" id="gbi-roman-fixed-postage" value="20.00">
+
+    {% render 'gbi-variant-data' %}
 
     <div
       class="singal_row justify-content-between mb-4 pb-4 border-bottom"
@@ -68,8 +83,9 @@
 
       <div class="second_option_section" style="margin-top: 15px; text-align: center;">
         <div class="price price--large">
-          <span id="gbi-roman-display-price" style="font-size: 24px; font-weight: bold; color: #333;">₹0.00</span>
+          <span id="gbi-roman-display-price" style="font-size: 24px; font-weight: bold; color: #333;">{{ 0 | money }}</span>
         </div>
+        <div id="gbi-roman-price-breakdown" style="margin-top: 8px; font-size: 13px; line-height: 1.5; color: #666;"></div>
       </div>
     </div>
 

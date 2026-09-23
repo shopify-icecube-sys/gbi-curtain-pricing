@@ -43,65 +43,139 @@ function getRomanMakeupCost(width, drop) {
   return dropRow.prices[widthIndex];
 }
 
-function runRomanCalculation() {
-  console.log("GBI Roman Engine: Starting Calculation...");
+// "Thermal  Lining" / "thermal lining" / "THERMAL-LINING" all resolve to the same key.
+function gbiRomanNormalise(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function gbiRomanLookup(table, value) {
+  if (value == null) return undefined;
+  if (Object.prototype.hasOwnProperty.call(table, value)) return table[value];
+  const wanted = gbiRomanNormalise(value);
+  for (const key of Object.keys(table)) {
+    if (gbiRomanNormalise(key) === wanted) return table[key];
+  }
+  return undefined;
+}
+
+function gbiRomanVariantData() {
+  const el = document.getElementById('gbi-variant-data');
+  if (!el) return null;
+  try {
+    return JSON.parse(el.textContent);
+  } catch (e) {
+    console.warn('[GBI Roman] Could not parse variant data', e);
+    return null;
+  }
+}
+
+function gbiRomanForm() {
+  return document.querySelector('product-form form[action*="/cart/add"]')
+    || document.querySelector('form[action*="/cart/add"]');
+}
+
+function gbiRomanVariantId() {
+  const form = gbiRomanForm();
+  const input = form && form.querySelector('[name="id"]');
+  const value = input && (input.value || input.getAttribute('value'));
+  return value ? String(value).trim() : null;
+}
+
+// Reads Lining from the SELECTED VARIANT, so it works whether the theme renders
+// the option picker as radios, swatches or a dropdown.
+function gbiRomanLiningFromVariant() {
+  const data = gbiRomanVariantData();
+  const variantId = gbiRomanVariantId();
+  if (!data || !variantId) return null;
+
+  const values = data.variants ? data.variants[variantId] : null;
+  if (!values) return null;
+
+  const names = data.optionNames || [];
+  for (let i = 0; i < names.length; i++) {
+    if (gbiRomanNormalise(names[i]).indexOf('lining') !== -1) return values[i];
+  }
+  return null;
+}
+
+// Legacy DOM scraping, kept only as a fallback when the variant map is unavailable.
+function gbiRomanLiningFromDom() {
+  const legends = document.querySelectorAll('fieldset legend');
+  for (const legend of legends) {
+    if (legend.textContent.trim().includes('Lining')) {
+      const checked = legend.parentElement.querySelector('input[type="radio"]:checked');
+      if (checked) return checked.value.trim();
+    }
+  }
+
+  const labels = document.querySelectorAll('label');
+  for (const label of labels) {
+    if (label.textContent.trim().includes('Lining')) {
+      const selectId = label.getAttribute('for');
+      const select = selectId ? document.getElementById(selectId) : null;
+      if (select && select.value) return select.value.trim();
+    }
+  }
+
+  return null;
+}
+
+function gbiRomanFormatMoney(amount) {
+  const data = gbiRomanVariantData() || {};
+  const currency = data.currency || 'GBP';
+  try {
+    return new Intl.NumberFormat(data.locale || 'en-GB', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  } catch (e) {
+    return currency + ' ' + amount.toFixed(2);
+  }
+}
+
+let gbiRomanHasCalculated = false;
+let gbiRomanLastVariantId = null;
+
+function runRomanCalculation(options) {
+  const silent = !!(options && options.silent);
 
   const widthInput = document.getElementById('gbi-roman-width');
   const dropInput = document.getElementById('gbi-roman-drop');
-  const width = parseFloat(widthInput?.value) || 0;
-  const drop = parseFloat(dropInput?.value) || 0;
+  const width = parseFloat(widthInput && widthInput.value) || 0;
+  const drop = parseFloat(dropInput && dropInput.value) || 0;
 
   if (width <= 0 || drop <= 0) {
-    alert("Please enter valid width and drop.");
+    if (!silent) alert('Please enter valid width and drop.');
+    resetRomanPrice();
     return;
   }
 
-  // Get Lining selection (similar to Curtain logic)
-  function getVisibleValue(name) {
-    const legends = document.querySelectorAll('fieldset legend');
-    for (let legend of legends) {
-      if (legend.textContent.trim().includes(name)) {
-        const checkedInput = legend.parentElement.querySelector('input[type="radio"]:checked');
-        if (checkedInput) {
-          return checkedInput.value.trim();
-        }
-      }
-    }
-
-    const labels = document.querySelectorAll('label');
-    for (let label of labels) {
-      if (label.textContent.trim().includes(name)) {
-        const selectId = label.getAttribute('for');
-        if (selectId) {
-          const select = document.getElementById(selectId);
-          if (select) return select.value.trim();
-        }
-      }
-    }
-    return null;
-  }
-
-  let liningName = getVisibleValue("Lining");
+  const liningName = gbiRomanLiningFromVariant() || gbiRomanLiningFromDom();
 
   if (!liningName) {
-    alert("Please select a Lining variant.");
+    if (!silent) alert('Please select a Lining variant.');
+    resetRomanPrice();
     return;
   }
 
-  const fabricRRP = parseFloat(document.getElementById('gbi-roman-meta-metre-cost')?.value) || 0;
-  const verticalRepeat = parseFloat(document.getElementById('gbi-roman-meta-vertical-repeat')?.value) || 0;
-
-  const liningCost = ROMAN_CONFIG.lining[liningName];
+  const liningCost = gbiRomanLookup(ROMAN_CONFIG.lining, liningName);
 
   if (liningCost === undefined) {
-    console.warn("Mapping missing for selected lining:", liningName);
+    console.warn('[GBI Roman] Mapping missing for selected lining:', liningName);
+    if (!silent) alert('Pricing is not configured for the selected lining. Please contact us.');
+    resetRomanPrice();
     return;
   }
+
+  const fabricRRP = parseFloat(document.getElementById('gbi-roman-meta-metre-cost') && document.getElementById('gbi-roman-meta-metre-cost').value) || 0;
+  const verticalRepeat = parseFloat(document.getElementById('gbi-roman-meta-vertical-repeat') && document.getElementById('gbi-roman-meta-vertical-repeat').value) || 0;
+  const postageEl = document.getElementById('gbi-roman-fixed-postage');
+  const postage = parseFloat(postageEl && postageEl.value) || ROMAN_CONFIG.postage;
 
   // Roman Blind Fabric Logic
   // Cutoff is now 123cm according to client.
   let fabricRequiredCm = 0;
-  
+
   if (width <= 123) {
     // 1 width is ok
     fabricRequiredCm = drop + 20;
@@ -111,63 +185,113 @@ function runRomanCalculation() {
   }
 
   // Convert to metres and round up to 1 decimal
-  let fabricMetres = Math.ceil((fabricRequiredCm / 100) * 10) / 10;
+  const fabricMetres = Math.ceil((fabricRequiredCm / 100) * 10) / 10;
 
   // Calculate costs
-  let totalFabricCost = fabricMetres * fabricRRP;
-  let totalLiningCost = fabricMetres * liningCost;
+  const totalFabricCost = fabricMetres * fabricRRP;
+  const totalLiningCost = fabricMetres * liningCost;
 
   // Use new Matrix for Make up and Headrail
-  let totalMakeupAndHeadrail = getRomanMakeupCost(width, drop);
+  const totalMakeupAndHeadrail = getRomanMakeupCost(width, drop);
 
-  let finalPrice = totalFabricCost + totalLiningCost + totalMakeupAndHeadrail + ROMAN_CONFIG.postage;
+  const finalPrice = totalFabricCost + totalLiningCost + totalMakeupAndHeadrail + postage;
+
+  console.log('[GBI Roman] Breakdown', {
+    lining: liningName,
+    liningRatePerMetre: liningCost,
+    fabricMetres: fabricMetres,
+    totalFabricCost: totalFabricCost,
+    totalLiningCost: totalLiningCost,
+    makeupAndHeadrail: totalMakeupAndHeadrail,
+    postage: postage,
+    finalPrice: finalPrice
+  });
 
   const priceDisplay = document.getElementById('gbi-roman-display-price');
   if (priceDisplay) {
-    priceDisplay.style.opacity = '0.5';
-    setTimeout(() => {
-      const formattedPrice = "₹" + finalPrice.toFixed(2);
-      priceDisplay.innerText = formattedPrice;
-      priceDisplay.style.opacity = '1';
-
-      // Inject _calculated_price (must match Cart Transform function's attribute key)
-      injectRomanHiddenPropertyToForm('gbi_calculated_price', finalPrice.toFixed(2));
-      injectRomanHiddenPropertyToForm('Width (cm)', width);
-      injectRomanHiddenPropertyToForm('Drop (cm)', drop);
-
-    }, 50);
+    priceDisplay.innerText = gbiRomanFormatMoney(finalPrice);
   }
+
+  const breakdown = document.getElementById('gbi-roman-price-breakdown');
+  if (breakdown) {
+    breakdown.innerHTML = [
+      fabricMetres.toFixed(1) + 'm fabric @ ' + gbiRomanFormatMoney(fabricRRP) + '/m',
+      liningName + ' lining @ ' + gbiRomanFormatMoney(liningCost) + '/m',
+      'Make up & headrail ' + gbiRomanFormatMoney(totalMakeupAndHeadrail),
+      'Delivery ' + gbiRomanFormatMoney(postage)
+    ].join('<br>');
+  }
+
+  gbiRomanHasCalculated = true;
+  gbiRomanInjectProperty('gbi_calculated_price', finalPrice.toFixed(2));
+  gbiRomanInjectProperty('Width (cm)', width);
+  gbiRomanInjectProperty('Drop (cm)', drop);
 }
 
-function injectRomanHiddenPropertyToForm(propertyName, propertyValue) {
-  // First try finding inside <product-form>, fallback to action attribute
-  const form = document.querySelector('product-form form') || document.querySelector('form[action*="/cart/add"]');
+function resetRomanPrice() {
+  gbiRomanHasCalculated = false;
+
+  const priceDisplay = document.getElementById('gbi-roman-display-price');
+  if (priceDisplay) priceDisplay.innerText = gbiRomanFormatMoney(0);
+
+  const breakdown = document.getElementById('gbi-roman-price-breakdown');
+  if (breakdown) breakdown.innerHTML = '';
+
+  const form = gbiRomanForm();
+  if (!form) return;
+  const stale = form.querySelector('input[name="properties[gbi_calculated_price]"]');
+  if (stale) stale.remove();
+}
+
+function gbiRomanInjectProperty(propertyName, propertyValue) {
+  const form = gbiRomanForm();
 
   if (!form) {
     console.warn('[GBI Roman] Add to cart form not found.');
     return;
   }
 
-  let existingInput = form.querySelector(`input[name="properties[${propertyName}]"]`);
+  let existingInput = form.querySelector('input[name="properties[' + propertyName + ']"]');
 
   if (!existingInput) {
     existingInput = document.createElement('input');
     existingInput.type = 'hidden';
-    existingInput.name = `properties[${propertyName}]`;
+    existingInput.name = 'properties[' + propertyName + ']';
     form.appendChild(existingInput);
   }
 
   existingInput.value = propertyValue;
-  console.log(`[GBI Roman] Injected ${propertyName} = ${propertyValue} into form`);
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-  const calcBtn = document.getElementById('gbi-roman-calculate-btn');
-  if (calcBtn) {
-    calcBtn.addEventListener('click', function (e) {
-      e.preventDefault();
-      runRomanCalculation();
-    });
+// The price must follow the variant picker. Themes update [name="id"] via JS
+// (no change event in many custom themes), so poll the selected variant id.
+function gbiRomanWatchVariant() {
+  gbiRomanLastVariantId = gbiRomanVariantId();
+
+  setInterval(function () {
+    const id = gbiRomanVariantId();
+    if (!id || id === gbiRomanLastVariantId) return;
+    gbiRomanLastVariantId = id;
+
+    if (gbiRomanHasCalculated) {
+      runRomanCalculation({ silent: true });
+    } else {
+      resetRomanPrice();
+    }
+  }, 300);
+}
+
+// Delegated so it survives theme section re-renders on variant change.
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest && e.target.closest('#gbi-roman-calculate-btn');
+  if (!btn) return;
+  e.preventDefault();
+  runRomanCalculation();
+});
+
+document.addEventListener('input', function (e) {
+  if (e.target.id === 'gbi-roman-width' || e.target.id === 'gbi-roman-drop') {
+    if (gbiRomanHasCalculated) runRomanCalculation({ silent: true });
   }
 });
 
@@ -175,17 +299,16 @@ document.addEventListener('submit', function (e) {
   const form = e.target;
 
   if (!form.closest('product-form') && (!form.action || !form.action.includes('/cart/add'))) return;
-
-  const calculatorExists = document.getElementById('gbi-roman-calculate-btn');
-  if (!calculatorExists) return;
+  if (!document.getElementById('gbi-roman-calculate-btn')) return;
 
   const existingInput = form.querySelector('input[name="properties[gbi_calculated_price]"]');
 
-  if (!existingInput || !existingInput.value) {
+  if (!existingInput || !parseFloat(existingInput.value)) {
     console.warn('[GBI Roman] Missing calculated price before submit');
     e.preventDefault();
     e.stopImmediatePropagation(); // Stop theme's AJAX script from firing
     alert('Please calculate the Roman Blind price first before adding to cart.');
-    return;
   }
 });
+
+gbiRomanWatchVariant();

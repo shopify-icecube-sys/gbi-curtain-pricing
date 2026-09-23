@@ -1,0 +1,57 @@
+{%- liquid
+  assign gbi_fabric_cost = product.metafields.custom.fabric_cost_per_metre.value
+  if gbi_fabric_cost == blank
+    for field in product.metafields.custom
+      assign gbi_key = field[0]
+      if gbi_key contains 'fabric_cost' and field[1].value != blank
+        assign gbi_fabric_cost = field[1].value
+        break
+      endif
+    endfor
+  endif
+-%}
+
+{% if gbi_fabric_cost != blank %}
+  <div
+    class="gbi-roman-button bg-light p-23"
+    style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin-bottom: 20px;"
+  >
+    <div class="price_option_section">
+      <button
+        type="button"
+        id="gbi-roman-calculate-btn"
+        class="button button--primary"
+        style="background: #000; color: #fff; padding: 12px 20px; border: none; cursor: pointer; font-weight: bold; border-radius: 4px; width: 100%;"
+      >
+        Calculate Price
+      </button>
+
+      <div class="second_option_section" style="margin-top: 15px; text-align: center;">
+        <div class="price price--large">
+          <span id="gbi-roman-display-price" style="font-size: 24px; font-weight: bold; color: #333;">{{ 0 | money }}</span>
+        </div>
+        {% if block.settings.show_breakdown %}
+          <div id="gbi-roman-price-breakdown" style="margin-top: 8px; font-size: 13px; line-height: 1.5; color: #666;"></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <script src="{{ 'roman-calculator.js' | asset_url }}" defer></script>
+  </div>
+{% endif %}
+
+{% schema %}
+{
+  "name": "GBI Roman Button",
+  "target": "section",
+  "templates": ["product"],
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "show_breakdown",
+      "label": "Show price breakdown under the price",
+      "default": false
+    }
+  ]
+}
+{% endschema %}
