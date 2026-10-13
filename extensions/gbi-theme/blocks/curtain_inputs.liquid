@@ -27,6 +27,11 @@
     <input type="hidden" id="gbi-cushion-labour" value="{{ block.settings.cushion_labour | default: 25.00 }}">
     <input type="hidden" id="gbi-cushion-postage" value="{{ block.settings.cushion_postage | default: 10.00 }}">
 
+    {% comment %} Tiebacks add-on. Sold in pairs; Plain and Piped are the same price. {% endcomment %}
+    <input type="hidden" id="gbi-tieback-multiplier" value="{{ block.settings.tieback_multiplier | default: 0.8 }}">
+    <input type="hidden" id="gbi-tieback-labour" value="{{ block.settings.tieback_labour | default: 48.00 }}">
+    <input type="hidden" id="gbi-tieback-postage" value="{{ block.settings.tieback_postage | default: 10.00 }}">
+
     {% render 'gbi-variant-data' %}
 
     <div style="display: flex; gap: 15px; align-items: center;">
@@ -79,6 +84,31 @@
       "label": "Cushion postage",
       "default": 10,
       "info": "Set to 0 if the curtain delivery charge already covers the cushion."
+    },
+    {
+      "type": "header",
+      "content": "Tiebacks add-on",
+      "info": "Price is per pair. Plain and Piped cost the same."
+    },
+    {
+      "type": "text",
+      "id": "tieback_multiplier",
+      "label": "Tieback fabric multiplier (metres)",
+      "default": "0.8",
+      "info": "Metres of fabric per pair x the fabric cost per metre."
+    },
+    {
+      "type": "number",
+      "id": "tieback_labour",
+      "label": "Tieback labour cost",
+      "default": 48
+    },
+    {
+      "type": "number",
+      "id": "tieback_postage",
+      "label": "Tieback postage",
+      "default": 10,
+      "info": "Set to 0 if the curtain delivery charge already covers the tiebacks."
     }
   ]
 }

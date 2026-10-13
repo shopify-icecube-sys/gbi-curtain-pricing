@@ -134,6 +134,19 @@ function gbiCushionPrice(fabricRRP) {
     + gbiNumberFrom('gbi-cushion-postage', 10.00);
 }
 
+// Tiebacks add-on. Sold in pairs only; Plain and Piped are the same price.
+// Client's formula: 0.8m x fabric cost per metre + labour + postage.
+function gbiTiebacksSelected() {
+  const checked = document.querySelector('input[name="properties[Tiebacks]"]:checked');
+  return !!checked && gbiNormalise(checked.value) === 'yes';
+}
+
+function gbiTiebackPrice(fabricRRP) {
+  return (fabricRRP * gbiNumberFrom('gbi-tieback-multiplier', 0.8))
+    + gbiNumberFrom('gbi-tieback-labour', 48.00)
+    + gbiNumberFrom('gbi-tieback-postage', 10.00);
+}
+
 let gbiHasCalculated = false;
 let gbiLastVariantId = null;
 
@@ -193,7 +206,8 @@ function runGbiCalculation(options) {
   const curtainPrice = fabricTotal + liningTotal + laborTotal + postage;
 
   const cushionTotal = gbiCushionSelected() ? gbiCushionPrice(fabricRRP) : 0;
-  const finalPrice = curtainPrice + cushionTotal;
+  const tiebackTotal = gbiTiebacksSelected() ? gbiTiebackPrice(fabricRRP) : 0;
+  const finalPrice = curtainPrice + cushionTotal + tiebackTotal;
 
   console.log('[GBI] Breakdown', {
     style: styleName,
@@ -207,6 +221,7 @@ function runGbiCalculation(options) {
     postage: postage,
     curtainPrice: curtainPrice,
     cushionTotal: cushionTotal,
+    tiebackTotal: tiebackTotal,
     finalPrice: finalPrice
   });
 
@@ -224,6 +239,8 @@ function runGbiCalculation(options) {
       'Delivery ' + gbiFormatMoney(postage)
     ].concat(
       cushionTotal > 0 ? ['Matching cushion ' + gbiFormatMoney(cushionTotal)] : []
+    ).concat(
+      tiebackTotal > 0 ? ['Tiebacks (pair) ' + gbiFormatMoney(tiebackTotal)] : []
     ).join('<br>');
   }
 
@@ -236,6 +253,12 @@ function runGbiCalculation(options) {
     gbiInjectProperty('Cushion Price', gbiFormatMoney(cushionTotal));
   } else {
     gbiRemoveProperty('Cushion Price');
+  }
+
+  if (tiebackTotal > 0) {
+    gbiInjectProperty('Tieback Price', gbiFormatMoney(tiebackTotal));
+  } else {
+    gbiRemoveProperty('Tieback Price');
   }
 }
 
@@ -259,6 +282,7 @@ function resetGbiPrice() {
   const stale = form.querySelector('input[name="properties[gbi_calculated_price]"]');
   if (stale) stale.remove();
   gbiRemoveProperty('Cushion Price');
+  gbiRemoveProperty('Tieback Price');
 }
 
 function gbiInjectProperty(propertyName, propertyValue) {
@@ -308,7 +332,10 @@ document.addEventListener('click', function (e) {
 });
 
 document.addEventListener('change', function (e) {
-  if (e.target && e.target.name === 'properties[Cushion]') {
+  if (!e.target) return;
+  if (e.target.name === 'properties[Cushion]'
+    || e.target.name === 'properties[Tiebacks]'
+    || e.target.name === 'properties[Tieback Edging]') {
     if (gbiHasCalculated) runGbiCalculation({ silent: true });
   }
 });
