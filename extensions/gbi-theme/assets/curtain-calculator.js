@@ -14,12 +14,7 @@ const GBI_MASTER_CONFIG = {
     "Double Pinch Pleat": { fullness: 2.5, labor: 73.00 },
     "Wave": { fullness: 2.2, labor: 55.00 },
     "3inch Pencil Pleat": { fullness: 2.0, labor: 50.00 },
-    "6inch Pencil Pleat": { fullness: 2.0, labor: 50.00 },
-
-    // Transitional only - remove once every curtain product has been renamed and
-    // Goblet Pleat has been deleted from all of them.
-    "Pinch Pleat": { fullness: 2.5, labor: 73.00 },
-    "Goblet Pleat": { fullness: 2.5, labor: 73.00 }
+    "6inch Pencil Pleat": { fullness: 2.0, labor: 50.00 }
   },
   hemAllowance: 30
 };
