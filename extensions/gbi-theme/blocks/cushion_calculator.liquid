@@ -25,6 +25,10 @@
     <input type="hidden" id="gbi-cushion-postage" value="{{ block.settings.postage | default: 10.00 }}">
     <input type="hidden" id="gbi-cushion-piped-extra" value="{{ block.settings.piped_extra | default: 0 }}">
 
+    {% comment %} Cushion filler, charged per pad {% endcomment %}
+    <input type="hidden" id="gbi-cushion-filler-feather" value="{{ block.settings.filler_feather | default: 25.00 }}">
+    <input type="hidden" id="gbi-cushion-filler-fibre" value="{{ block.settings.filler_fibre | default: 13.00 }}">
+
     {% render 'gbi-variant-data' %}
 
     <div class="price_option_section" style="padding-top: 5px;">
@@ -83,6 +87,23 @@
       "label": "Piped edging extra cost",
       "default": 0,
       "info": "Added when the Edging option is Piped. Leave at 0 until the client confirms the rate."
+    },
+    {
+      "type": "header",
+      "content": "Cushion filler",
+      "info": "Charged per pad. The option itself is on the product page."
+    },
+    {
+      "type": "number",
+      "id": "filler_feather",
+      "label": "Feather filled pad",
+      "default": 25
+    },
+    {
+      "type": "number",
+      "id": "filler_fibre",
+      "label": "Fibre filled pad",
+      "default": 13
     },
     {
       "type": "checkbox",

@@ -70,6 +70,39 @@ function gbiCushionFormatMoney(amount) {
   }
 }
 
+// Cushion filler, charged per pad. Matched on the wording so the option labels
+// on the product page can be reworded without breaking the pricing.
+function gbiCushionFillerRate(value) {
+  const key = gbiCushionNormalise(value);
+  if (key.indexOf('feather') !== -1) return gbiCushionNumberFrom('gbi-cushion-filler-feather', 25.00);
+  if (key.indexOf('fibre') !== -1 || key.indexOf('fiber') !== -1) {
+    return gbiCushionNumberFrom('gbi-cushion-filler-fibre', 13.00);
+  }
+  return 0;
+}
+
+function gbiCushionFillerSelect() {
+  return document.querySelector('select[name="properties[Cushion Filler]"]');
+}
+
+function gbiCushionSelectedFiller() {
+  const select = gbiCushionFillerSelect();
+  return select ? select.value : '';
+}
+
+// Show the charge next to each filler option, using the rates from the block
+// settings so there is only one place to change them.
+function gbiCushionLabelFillerOptions() {
+  const select = gbiCushionFillerSelect();
+  if (!select) return;
+  Array.prototype.forEach.call(select.options, function (option) {
+    const rate = gbiCushionFillerRate(option.value);
+    const base = option.getAttribute('data-gbi-label') || option.textContent.trim();
+    option.setAttribute('data-gbi-label', base);
+    option.textContent = rate > 0 ? base + ' (+' + gbiCushionFormatMoney(rate) + ')' : base;
+  });
+}
+
 // The product page shows the line total, so the price follows the quantity box.
 // The cart property stays per unit - Shopify multiplies it by the line quantity.
 function gbiCushionQuantity() {
@@ -104,8 +137,11 @@ function runCushionCalculation(options) {
   const edgingCost = isPiped ? pipedExtra : 0;
 
   // Cost of fabric x multiplier + labour + p&p (+ piped edging when set)
+  const fillerName = gbiCushionSelectedFiller();
+  const fillerCost = gbiCushionFillerRate(fillerName);
+
   const totalFabricCost = fabricRRP * multiplier;
-  const finalPrice = totalFabricCost + labour + postage + edgingCost;
+  const finalPrice = totalFabricCost + labour + postage + edgingCost + fillerCost;
 
   console.log('[GBI Cushion] Breakdown', {
     edging: selected.edging || null,
@@ -116,6 +152,8 @@ function runCushionCalculation(options) {
     labour: labour,
     postage: postage,
     edgingCost: edgingCost,
+    filler: fillerName || null,
+    fillerCost: fillerCost,
     finalPrice: finalPrice
   });
 
@@ -141,6 +179,8 @@ function runCushionCalculation(options) {
       'Delivery ' + gbiCushionFormatMoney(postage)
     ].concat(
       edgingCost > 0 ? ['Piped edging ' + gbiCushionFormatMoney(edgingCost)] : []
+    ).concat(
+      fillerCost > 0 ? [fillerName + ' ' + gbiCushionFormatMoney(fillerCost)] : []
     ).join('<br>');
   }
 
@@ -229,6 +269,15 @@ document.addEventListener('submit', function (e) {
 });
 
 gbiCushionWatchVariant();
+
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.name === 'properties[Cushion Filler]') {
+    if (gbiCushionHasCalculated) runCushionCalculation({ silent: true });
+  }
+});
+
+document.addEventListener('DOMContentLoaded', gbiCushionLabelFillerOptions);
+gbiCushionLabelFillerOptions();
 
 function gbiCushionOnQuantityChange(e) {
   if (!e.target || e.target.name !== 'quantity') return;
