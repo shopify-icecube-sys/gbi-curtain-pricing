@@ -137,7 +137,13 @@ function gbiRomanFormatMoney(amount) {
 // The cart property stays per unit - Shopify multiplies it by the line quantity.
 function gbiRomanQuantity() {
   const form = gbiRomanForm();
-  const input = form && form.querySelector('[name="quantity"]');
+  // Themes usually render the quantity box outside the <form> and attach it
+  // with a form="" attribute, so look there too before falling back.
+  let input = form && form.querySelector('[name="quantity"]');
+  if (!input && form && form.id) {
+    input = document.querySelector('[name="quantity"][form="' + form.id + '"]');
+  }
+  if (!input) input = document.querySelector('input[name="quantity"]');
   const value = parseInt(input && input.value, 10);
   return isNaN(value) || value < 1 ? 1 : value;
 }
