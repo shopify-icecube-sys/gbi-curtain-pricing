@@ -133,6 +133,58 @@ function gbiRomanFormatMoney(amount) {
   }
 }
 
+// Matching cushion add-on and its filler, offered alongside Roman blinds.
+// Same formula as the curtain pages: fabric x multiplier + labour + postage.
+function gbiRomanNumberFrom(id, fallback) {
+  const el = document.getElementById(id);
+  const value = parseFloat(el && el.value);
+  return isNaN(value) ? fallback : value;
+}
+
+function gbiRomanCushionSelected() {
+  const checked = document.querySelector('input[name="properties[Cushion]"]:checked');
+  return !!checked && gbiRomanNormalise(checked.value) === 'yes';
+}
+
+function gbiRomanCushionPrice(fabricRRP) {
+  return (fabricRRP * gbiRomanNumberFrom('gbi-roman-cushion-multiplier', 0.6))
+    + gbiRomanNumberFrom('gbi-roman-cushion-labour', 25.00)
+    + gbiRomanNumberFrom('gbi-roman-cushion-postage', 10.00);
+}
+
+// Matched on the wording, so the option labels can be reworded without
+// breaking the pricing.
+function gbiRomanFillerRate(value) {
+  const key = gbiRomanNormalise(value);
+  if (key.indexOf('feather') !== -1) return gbiRomanNumberFrom('gbi-roman-filler-feather', 25.00);
+  if (key.indexOf('fibre') !== -1 || key.indexOf('fiber') !== -1) {
+    return gbiRomanNumberFrom('gbi-roman-filler-fibre', 13.00);
+  }
+  return 0;
+}
+
+function gbiRomanFillerSelect() {
+  return document.querySelector('select[name="properties[Cushion Filler]"]');
+}
+
+function gbiRomanSelectedFiller() {
+  const select = gbiRomanFillerSelect();
+  return select && !select.disabled ? select.value : '';
+}
+
+// Write the charge into each filler option, using the rates from the block
+// settings so there is only one place to change them.
+function gbiRomanLabelFillerOptions() {
+  const select = gbiRomanFillerSelect();
+  if (!select) return;
+  Array.prototype.forEach.call(select.options, function (option) {
+    const rate = gbiRomanFillerRate(option.value);
+    const base = option.getAttribute('data-gbi-label') || option.textContent.trim();
+    option.setAttribute('data-gbi-label', base);
+    option.textContent = rate > 0 ? base + ' (+' + gbiRomanFormatMoney(rate) + ')' : base;
+  });
+}
+
 // The product page shows the line total, so the price follows the quantity box.
 // The cart property stays per unit - Shopify multiplies it by the line quantity.
 function gbiRomanQuantity() {
@@ -209,7 +261,13 @@ function runRomanCalculation(options) {
   // Use new Matrix for Make up and Headrail
   const totalMakeupAndHeadrail = getRomanMakeupCost(width, drop);
 
-  const finalPrice = totalFabricCost + totalLiningCost + totalMakeupAndHeadrail + postage;
+  const blindPrice = totalFabricCost + totalLiningCost + totalMakeupAndHeadrail + postage;
+
+  const cushionTotal = gbiRomanCushionSelected() ? gbiRomanCushionPrice(fabricRRP) : 0;
+  const fillerName = cushionTotal > 0 ? gbiRomanSelectedFiller() : '';
+  const fillerCost = gbiRomanFillerRate(fillerName);
+
+  const finalPrice = blindPrice + cushionTotal + fillerCost;
 
   console.log('[GBI Roman] Breakdown', {
     lining: liningName,
@@ -219,6 +277,10 @@ function runRomanCalculation(options) {
     totalLiningCost: totalLiningCost,
     makeupAndHeadrail: totalMakeupAndHeadrail,
     postage: postage,
+    blindPrice: blindPrice,
+    cushionTotal: cushionTotal,
+    filler: fillerName || null,
+    fillerCost: fillerCost,
     finalPrice: finalPrice
   });
 
@@ -243,7 +305,11 @@ function runRomanCalculation(options) {
       liningName + ' lining @ ' + gbiRomanFormatMoney(liningCost) + '/m',
       'Make up & headrail ' + gbiRomanFormatMoney(totalMakeupAndHeadrail),
       'Delivery ' + gbiRomanFormatMoney(postage)
-    ].join('<br>');
+    ].concat(
+      cushionTotal > 0 ? ['Matching cushion ' + gbiRomanFormatMoney(cushionTotal)] : []
+    ).concat(
+      fillerCost > 0 ? [fillerName + ' ' + gbiRomanFormatMoney(fillerCost)] : []
+    ).join('<br>');
   }
 
   gbiRomanHasCalculated = true;
@@ -339,6 +405,16 @@ document.addEventListener('submit', function (e) {
 });
 
 gbiRomanWatchVariant();
+
+document.addEventListener('change', function (e) {
+  if (!e.target) return;
+  if (e.target.name === 'properties[Cushion]' || e.target.name === 'properties[Cushion Filler]') {
+    if (gbiRomanHasCalculated) runRomanCalculation({ silent: true });
+  }
+});
+
+document.addEventListener('DOMContentLoaded', gbiRomanLabelFillerOptions);
+gbiRomanLabelFillerOptions();
 
 function gbiRomanOnQuantityChange(e) {
   if (!e.target || e.target.name !== 'quantity') return;
