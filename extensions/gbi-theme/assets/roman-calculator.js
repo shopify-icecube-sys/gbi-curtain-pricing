@@ -133,6 +133,15 @@ function gbiRomanFormatMoney(amount) {
   }
 }
 
+// The product page shows the line total, so the price follows the quantity box.
+// The cart property stays per unit - Shopify multiplies it by the line quantity.
+function gbiRomanQuantity() {
+  const form = gbiRomanForm();
+  const input = form && form.querySelector('[name="quantity"]');
+  const value = parseInt(input && input.value, 10);
+  return isNaN(value) || value < 1 ? 1 : value;
+}
+
 let gbiRomanHasCalculated = false;
 let gbiRomanLastVariantId = null;
 
@@ -207,9 +216,18 @@ function runRomanCalculation(options) {
     finalPrice: finalPrice
   });
 
+  const quantity = gbiRomanQuantity();
+
   const priceDisplay = document.getElementById('gbi-roman-display-price');
   if (priceDisplay) {
-    priceDisplay.innerText = gbiRomanFormatMoney(finalPrice);
+    priceDisplay.innerText = gbiRomanFormatMoney(finalPrice * quantity);
+  }
+
+  const qtyNote = document.getElementById('gbi-roman-qty-note');
+  if (qtyNote) {
+    qtyNote.innerText = quantity > 1
+      ? quantity + ' \u00d7 ' + gbiRomanFormatMoney(finalPrice) + ' each'
+      : '';
   }
 
   const breakdown = document.getElementById('gbi-roman-price-breakdown');
@@ -233,6 +251,9 @@ function resetRomanPrice() {
 
   const priceDisplay = document.getElementById('gbi-roman-display-price');
   if (priceDisplay) priceDisplay.innerText = gbiRomanFormatMoney(0);
+
+  const qtyNote = document.getElementById('gbi-roman-qty-note');
+  if (qtyNote) qtyNote.innerText = '';
 
   const breakdown = document.getElementById('gbi-roman-price-breakdown');
   if (breakdown) breakdown.innerHTML = '';
@@ -312,3 +333,10 @@ document.addEventListener('submit', function (e) {
 });
 
 gbiRomanWatchVariant();
+
+function gbiRomanOnQuantityChange(e) {
+  if (!e.target || e.target.name !== 'quantity') return;
+  if (gbiRomanHasCalculated) runRomanCalculation({ silent: true });
+}
+document.addEventListener('change', gbiRomanOnQuantityChange);
+document.addEventListener('input', gbiRomanOnQuantityChange);

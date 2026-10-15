@@ -146,6 +146,15 @@ function gbiTiebackPrice(fabricRRP) {
     + gbiNumberFrom('gbi-tieback-postage', 10.00);
 }
 
+// The product page shows the line total, so the price follows the quantity box.
+// The cart property stays per unit - Shopify multiplies it by the line quantity.
+function gbiQuantity() {
+  const form = gbiProductForm();
+  const input = form && form.querySelector('[name="quantity"]');
+  const value = parseInt(input && input.value, 10);
+  return isNaN(value) || value < 1 ? 1 : value;
+}
+
 let gbiHasCalculated = false;
 let gbiLastVariantId = null;
 
@@ -224,9 +233,18 @@ function runGbiCalculation(options) {
     finalPrice: finalPrice
   });
 
+  const quantity = gbiQuantity();
+
   const priceDisplay = document.getElementById('gbi-display-price');
   if (priceDisplay) {
-    priceDisplay.innerText = gbiFormatMoney(finalPrice);
+    priceDisplay.innerText = gbiFormatMoney(finalPrice * quantity);
+  }
+
+  const qtyNote = document.getElementById('gbi-qty-note');
+  if (qtyNote) {
+    qtyNote.innerText = quantity > 1
+      ? quantity + ' \u00d7 ' + gbiFormatMoney(finalPrice) + ' each'
+      : '';
   }
 
   const breakdown = document.getElementById('gbi-price-breakdown');
@@ -272,6 +290,9 @@ function resetGbiPrice() {
 
   const priceDisplay = document.getElementById('gbi-display-price');
   if (priceDisplay) priceDisplay.innerText = gbiFormatMoney(0);
+
+  const qtyNote = document.getElementById('gbi-qty-note');
+  if (qtyNote) qtyNote.innerText = '';
 
   const breakdown = document.getElementById('gbi-price-breakdown');
   if (breakdown) breakdown.innerHTML = '';
@@ -359,3 +380,10 @@ document.addEventListener('submit', function (e) {
 });
 
 gbiWatchVariant();
+
+function gbiOnQuantityChange(e) {
+  if (!e.target || e.target.name !== 'quantity') return;
+  if (gbiHasCalculated) runGbiCalculation({ silent: true });
+}
+document.addEventListener('change', gbiOnQuantityChange);
+document.addEventListener('input', gbiOnQuantityChange);

@@ -70,6 +70,15 @@ function gbiCushionFormatMoney(amount) {
   }
 }
 
+// The product page shows the line total, so the price follows the quantity box.
+// The cart property stays per unit - Shopify multiplies it by the line quantity.
+function gbiCushionQuantity() {
+  const form = gbiCushionForm();
+  const input = form && form.querySelector('[name="quantity"]');
+  const value = parseInt(input && input.value, 10);
+  return isNaN(value) || value < 1 ? 1 : value;
+}
+
 let gbiCushionHasCalculated = false;
 let gbiCushionLastVariantId = null;
 
@@ -110,9 +119,18 @@ function runCushionCalculation(options) {
     finalPrice: finalPrice
   });
 
+  const quantity = gbiCushionQuantity();
+
   const priceDisplay = document.getElementById('gbi-cushion-display-price');
   if (priceDisplay) {
-    priceDisplay.innerText = gbiCushionFormatMoney(finalPrice);
+    priceDisplay.innerText = gbiCushionFormatMoney(finalPrice * quantity);
+  }
+
+  const qtyNote = document.getElementById('gbi-cushion-qty-note');
+  if (qtyNote) {
+    qtyNote.innerText = quantity > 1
+      ? quantity + ' \u00d7 ' + gbiCushionFormatMoney(finalPrice) + ' each'
+      : '';
   }
 
   const breakdown = document.getElementById('gbi-cushion-price-breakdown');
@@ -135,6 +153,9 @@ function resetCushionPrice() {
 
   const priceDisplay = document.getElementById('gbi-cushion-display-price');
   if (priceDisplay) priceDisplay.innerText = gbiCushionFormatMoney(0);
+
+  const qtyNote = document.getElementById('gbi-cushion-qty-note');
+  if (qtyNote) qtyNote.innerText = '';
 
   const breakdown = document.getElementById('gbi-cushion-price-breakdown');
   if (breakdown) breakdown.innerHTML = '';
@@ -208,3 +229,10 @@ document.addEventListener('submit', function (e) {
 });
 
 gbiCushionWatchVariant();
+
+function gbiCushionOnQuantityChange(e) {
+  if (!e.target || e.target.name !== 'quantity') return;
+  if (gbiCushionHasCalculated) runCushionCalculation({ silent: true });
+}
+document.addEventListener('change', gbiCushionOnQuantityChange);
+document.addEventListener('input', gbiCushionOnQuantityChange);
